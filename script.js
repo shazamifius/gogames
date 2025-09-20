@@ -278,7 +278,6 @@ const updateScore = () => {
 
 // Fonctions de jeu et de logique de coup
 const placeStone = (event) => {
-    // S'assurer que c'est le tour du joueur
     if (currentPlayer !== myPlayerColor) {
         alert("Ce n'est pas votre tour !");
         return;
@@ -303,7 +302,6 @@ const placeStone = (event) => {
     
     lastMove = [gridX, gridY];
     
-    // Une fois que le coup est validé et joué, on l'envoie à l'autre joueur
     dataChannel.send(JSON.stringify({ type: 'move', board: board, lastMove: lastMove }));
     
     currentPlayer = currentPlayer === 1 ? 2 : 1;
@@ -451,7 +449,8 @@ createGameBtn.addEventListener('click', () => {
     startSignaling(gameId);
     
     gameLinkSection.style.display = 'block';
-    gameLinkDisplay.innerText = window.location.href + '?' + gameId;
+    // Ligne modifiée ici pour un lien plus robuste
+    gameLinkDisplay.innerText = window.location.href.split('?')[0] + '?gameId=' + gameId;
     createGameBtn.style.display = 'none';
     joinGameSection.style.display = 'none';
 });
@@ -465,9 +464,9 @@ joinGameBtn.addEventListener('click', () => {
     gameScreen.style.display = 'flex';
 });
 
-// Gérer le cas où on arrive via un lien de partie
+// Ligne modifiée ici pour une meilleure détection
 const urlParams = new URLSearchParams(window.location.search);
-const gameIdFromUrl = urlParams.get(urlParams.keys().next().value);
+const gameIdFromUrl = urlParams.get('gameId');
 if (gameIdFromUrl) {
     joinGameSection.style.display = 'flex';
     createGameBtn.style.display = 'none';

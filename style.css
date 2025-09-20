@@ -112,3 +112,12 @@ button img {
     margin-top: 20px;
     text-align: center;
 }
+#welcomeScreen h1,
+#welcomeScreen button {
+    color: white;
+}
+
+#joinGameSection input,
+#joinGameSection button {
+    color: white;
+}
