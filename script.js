@@ -460,8 +460,9 @@ registerBtn.addEventListener('click', () => {
     const email = emailInput.value;
     const password = passwordInput.value;
     auth.createUserWithEmailAndPassword(email, password)
-        .then(() => {
+        .then((userCredential) => {
             alert("Compte créé avec succès !");
+            updateUI(userCredential.user);
         })
         .catch(error => {
             alert(error.message);
@@ -472,8 +473,9 @@ loginBtn.addEventListener('click', () => {
     const email = emailInput.value;
     const password = passwordInput.value;
     auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-            // Géré par l'écouteur d'état de connexion
+        .then((userCredential) => {
+            alert("Connexion réussie !");
+            updateUI(userCredential.user);
         })
         .catch(error => {
             alert(error.message);
@@ -482,35 +484,39 @@ loginBtn.addEventListener('click', () => {
 
 logoutBtn.addEventListener('click', () => {
     auth.signOut();
+    updateUI(null);
 });
 
-// Gérer l'état de connexion et le flux de navigation
-// On vérifie le lien avant tout le reste
+// Nouvelle fonction pour mettre à jour l'interface
+const updateUI = (user) => {
+    if (user) {
+        authScreen.style.display = 'none';
+        welcomeScreen.style.display = 'flex';
+        logoutBtn.style.display = 'block';
+        authStatus.style.display = 'flex';
+        statusText.innerText = user.email; // On affiche l'email comme pseudo pour l'instant
+    } else {
+        authScreen.style.display = 'flex';
+        welcomeScreen.style.display = 'none';
+        logoutBtn.style.display = 'none';
+        authStatus.style.display = 'none';
+    }
+};
+
+// Gérer l'état initial de la page en fonction du lien
 const urlParams = new URLSearchParams(window.location.search);
 const gameIdFromUrl = urlParams.get('gameId');
 
 if (gameIdFromUrl) {
+    // Si un gameId est présent, on affiche directement l'écran pour rejoindre
     authScreen.style.display = 'none';
     welcomeScreen.style.display = 'flex';
     joinGameSection.style.display = 'flex';
     createGameBtn.style.display = 'none';
     gameIdInput.value = gameIdFromUrl;
 } else {
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            authScreen.style.display = 'none';
-            welcomeScreen.style.display = 'flex';
-            logoutBtn.style.display = 'block';
-            authStatus.style.display = 'flex';
-            // On affiche l'email de l'utilisateur
-            statusText.innerText = user.email;
-        } else {
-            authScreen.style.display = 'flex';
-            welcomeScreen.style.display = 'none';
-            logoutBtn.style.display = 'none';
-            authStatus.style.display = 'none';
-        }
-    });
+    // Sinon, on montre l'écran de connexion par défaut
+    updateUI(auth.currentUser);
 }
 
 // Logique pour les boutons de jeu
