@@ -13,7 +13,7 @@ const firebaseConfig = {
 // Initialise Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
-const auth = firebase.auth(); // Correction ici: on initialise l'authentification
+const auth = firebase.auth();
 
 // Éléments du DOM
 const authScreen = document.getElementById('authScreen');
@@ -425,10 +425,8 @@ const startSignaling = async (gameId) => {
             const answer = snapshot.val();
             if (answer) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                // On s'assure que l'écran de jeu s'affiche pour l'hôte
                 welcomeScreen.style.display = 'none';
                 gameScreen.style.display = 'flex';
-                alert("Connexion établie ! La partie peut commencer.");
             }
         });
     } 
@@ -465,7 +463,7 @@ const updateUI = (user) => {
         welcomeScreen.style.display = 'flex';
         logoutBtn.style.display = 'block';
         authStatus.style.display = 'flex';
-        statusText.innerText = `Connecté : ${user.email}`; // Affiche l'adresse e-mail
+        statusText.innerText = `Connecté : ${user.email}`;
     } else {
         authScreen.style.display = 'flex';
         welcomeScreen.style.display = 'none';
@@ -474,23 +472,13 @@ const updateUI = (user) => {
     }
 };
 
-auth.onAuthStateChanged(user => {
-    // Ne rien faire ici si un gameId est présent
-    const urlParams = new URLSearchParams(window.location.search);
-    const gameIdFromUrl = urlParams.get('gameId');
-    if (!gameIdFromUrl) {
-        updateUI(user);
-    }
-});
-
-
 registerBtn.addEventListener('click', () => {
     const email = emailInput.value;
     const password = passwordInput.value;
     auth.createUserWithEmailAndPassword(email, password)
         .then((userCredential) => {
             alert("Compte créé avec succès !");
-            updateUI(userCredential.user);
+            // L'écouteur onAuthStateChanged s'occupe de l'affichage
         })
         .catch(error => {
             alert(error.message);
@@ -503,7 +491,7 @@ loginBtn.addEventListener('click', () => {
     auth.signInWithEmailAndPassword(email, password)
         .then((userCredential) => {
             alert("Connexion réussie !");
-            updateUI(userCredential.user);
+            // L'écouteur onAuthStateChanged s'occupe de l'affichage
         })
         .catch(error => {
             alert(error.message);
@@ -514,21 +502,34 @@ logoutBtn.addEventListener('click', () => {
     auth.signOut();
 });
 
-// Gérer l'état initial de la page
-const urlParams = new URLSearchParams(window.location.search);
-const gameIdFromUrl = urlParams.get('gameId');
+// NOUVELLE LOGIQUE DE DÉMARRAGE : Gérer l'état de la page après que Firebase a chargé l'état de l'utilisateur
+auth.onAuthStateChanged(user => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameIdFromUrl = urlParams.get('gameId');
 
-if (gameIdFromUrl) {
-    // S'il y a un ID de partie dans l'URL, on affiche directement l'écran pour rejoindre
-    authScreen.style.display = 'none';
-    welcomeScreen.style.display = 'flex';
-    joinGameSection.style.display = 'flex';
-    createGameBtn.style.display = 'none';
-    gameIdInput.value = gameIdFromUrl;
-}
+    // On vérifie le lien en premier pour éviter le flash
+    if (gameIdFromUrl) {
+        authScreen.style.display = 'none';
+        welcomeScreen.style.display = 'flex';
+        joinGameSection.style.display = 'flex';
+        createGameBtn.style.display = 'none';
+        gameIdInput.value = gameIdFromUrl;
+        // Si l'utilisateur est aussi connecté, on affiche son email
+        if (user) {
+            updateUI(user);
+        }
+    } else {
+        // Si pas de lien de partie, on utilise la fonction updateUI pour afficher l'écran correct
+        updateUI(user);
+    }
+});
 
 // Logique pour les boutons de jeu
 createGameBtn.addEventListener('click', () => {
+    if (!auth.currentUser) {
+        alert("Vous devez être connecté pour créer une partie.");
+        return;
+    }
     const gameId = Math.random().toString(36).substring(2, 9);
     myPlayerColor = 1;
     startSignaling(gameId);
@@ -540,6 +541,10 @@ createGameBtn.addEventListener('click', () => {
 });
 
 joinGameBtn.addEventListener('click', () => {
+    if (!auth.currentUser) {
+        alert("Vous devez être connecté pour rejoindre une partie.");
+        return;
+    }
     const gameId = gameIdInput.value;
     myPlayerColor = 2;
     startSignaling(gameId);
