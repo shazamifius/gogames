@@ -48,6 +48,8 @@ const gameMessage = document.getElementById("gameMessage");
 const blackScoreEl = document.getElementById("blackScore");
 const whiteScoreEl = document.getElementById("whiteScore");
 
+const playerInfo = document.getElementById("playerInfo");
+
 /* ================================
    Game constants
 ================================= */
@@ -60,6 +62,7 @@ let history = []; // for Superko rule
 let currentPlayer = 1; // 1 = black, 2 = white
 let myColor = null;
 let myUid = null;
+let myNickname = null;
 
 let consecutivePasses = 0;
 let gameOver = false;
@@ -384,6 +387,8 @@ async function startSignaling(gameId, isCreator) {
       const answer = s.val();
       if (answer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        // start game when second player joins
+        showScreen(gameScreen);
       }
     });
   }
@@ -409,11 +414,28 @@ logoutBtn.onclick = () => auth.signOut();
 /* ================================
    Auth state change
 ================================= */
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     myUid = user.uid;
+    const snap = await db.ref("users/" + myUid).once("value");
+    let nickname = snap.val() ? snap.val().nickname : null;
+
+    if (!nickname) {
+      nickname = prompt("Choose a nickname:");
+      if (nickname) {
+        await db.ref("users/" + myUid).set({
+          email: user.email,
+          nickname: nickname
+        });
+      }
+    }
+    myNickname = nickname;
+    playerInfo.textContent = `${nickname} (${user.email})`;
     showScreen(lobbyScreen);
   } else {
+    myUid = null;
+    myNickname = null;
+    playerInfo.textContent = "Not connected";
     showScreen(authScreen);
   }
 });
@@ -421,21 +443,60 @@ auth.onAuthStateChanged(user => {
 /* ================================
    Lobby
 ================================= */
-createGameBtn.onclick = () => {
+createGameBtn.onclick = async () => {
+  if (!auth.currentUser) {
+    showMessage(lobbyMessage, "You must log in first!", "red");
+    return;
+  }
+
   const gameId = Math.random().toString(36).substring(2, 9);
   myColor = 1;
+
+  await db.ref("games/" + gameId).set({
+    status: "waiting",
+    players: {
+      black: {
+        uid: myUid,
+        email: auth.currentUser.email,
+        nickname: myNickname
+      }
+    }
+  });
+
   startSignaling(gameId, true);
-  showMessage(lobbyMessage, "Game created. Waiting for opponent...", "lightgreen");
   gameLinkSection.style.display = "block";
-  gameLinkDisplay.textContent = window.location.origin + window.location.pathname + "?gameId=" + gameId;
+  gameLinkDisplay.textContent =
+    window.location.origin + window.location.pathname + "?gameId=" + gameId;
+  showMessage(lobbyMessage, "Game created, waiting for opponent...", "lightgreen");
 };
 
-joinGameBtn.onclick = () => {
+joinGameBtn.onclick = async () => {
+  if (!auth.currentUser) {
+    showMessage(lobbyMessage, "You must log in first!", "red");
+    return;
+  }
+
   const gameId = gameIdInput.value.trim();
   if (!gameId) return;
+
+  const gameRef = db.ref("games/" + gameId);
+  const gameSnap = await gameRef.once("value");
+  if (!gameSnap.exists()) {
+    showMessage(lobbyMessage, "Game not found!", "red");
+    return;
+  }
+
   myColor = 2;
+  await gameRef.child("players/white").set({
+    uid: myUid,
+    email: auth.currentUser.email,
+    nickname: myNickname
+  });
+  await gameRef.update({ status: "playing" });
+
   startSignaling(gameId, false);
-  showMessage(lobbyMessage, "Joining game...", "lightgreen");
+  showMessage(lobbyMessage, "Joined game!", "lightgreen");
+  showScreen(gameScreen);
 };
 
 copyLinkBtn.onclick = () => {
