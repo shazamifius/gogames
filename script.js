@@ -459,6 +459,7 @@ joinGameBtn.addEventListener('click', () => {
     const gameId = gameIdInput.value;
     myPlayerColor = 2;
     startSignaling(gameId);
+    alert('Connexion réussie ! La partie va commencer.');
     
     welcomeScreen.style.display = 'none';
     gameScreen.style.display = 'flex';
