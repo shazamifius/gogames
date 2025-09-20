@@ -13,7 +13,7 @@ const firebaseConfig = {
 // Initialise Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
-const auth = firebase.auth();
+const auth = firebase.auth(); // Correction ici: on initialise l'authentification
 
 // Éléments du DOM
 const authScreen = document.getElementById('authScreen');
@@ -380,8 +380,6 @@ const createPeerConnection = async (isCreator) => {
         peerConnection.ondatachannel = (event) => {
             dataChannel = event.channel;
             setupDataChannelEvents();
-            welcomeScreen.style.display = 'none';
-            gameScreen.style.display = 'flex';
         };
         return null;
     }
@@ -400,17 +398,16 @@ const setupDataChannelEvents = () => {
     };
     dataChannel.onopen = () => {
         alert("Connexion établie ! La partie peut commencer.");
-        if (myPlayerColor === 1) {
-            welcomeScreen.style.display = 'none';
-            gameScreen.style.display = 'flex';
-        }
+        welcomeScreen.style.display = 'none';
+        gameScreen.style.display = 'flex';
     };
 };
 
 const startSignaling = async (gameId) => {
     const gameRef = database.ref('games/' + gameId);
     
-    if (myPlayerColor === 1) { // Créateur de partie
+    // Joueur 1 (créateur)
+    if (myPlayerColor === 1) {
         const offer = await createPeerConnection(true);
         gameRef.set({ offer: offer });
         
@@ -428,9 +425,15 @@ const startSignaling = async (gameId) => {
             const answer = snapshot.val();
             if (answer) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                // On s'assure que l'écran de jeu s'affiche pour l'hôte
+                welcomeScreen.style.display = 'none';
+                gameScreen.style.display = 'flex';
+                alert("Connexion établie ! La partie peut commencer.");
             }
         });
-    } else { // Joueur qui rejoint
+    } 
+    // Joueur 2 (joiner)
+    else {
         gameRef.once('value', async (snapshot) => {
             const data = snapshot.val();
             if (data.offer) {
@@ -455,7 +458,32 @@ const startSignaling = async (gameId) => {
     }
 };
 
-// Logique pour l'écran de connexion
+// Fonctions d'authentification
+const updateUI = (user) => {
+    if (user) {
+        authScreen.style.display = 'none';
+        welcomeScreen.style.display = 'flex';
+        logoutBtn.style.display = 'block';
+        authStatus.style.display = 'flex';
+        statusText.innerText = `Connecté : ${user.email}`; // Affiche l'adresse e-mail
+    } else {
+        authScreen.style.display = 'flex';
+        welcomeScreen.style.display = 'none';
+        logoutBtn.style.display = 'none';
+        authStatus.style.display = 'none';
+    }
+};
+
+auth.onAuthStateChanged(user => {
+    // Ne rien faire ici si un gameId est présent
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameIdFromUrl = urlParams.get('gameId');
+    if (!gameIdFromUrl) {
+        updateUI(user);
+    }
+});
+
+
 registerBtn.addEventListener('click', () => {
     const email = emailInput.value;
     const password = passwordInput.value;
@@ -486,23 +514,7 @@ logoutBtn.addEventListener('click', () => {
     auth.signOut();
 });
 
-// Gérer l'état de l'interface en fonction de l'utilisateur
-const updateUI = (user) => {
-    if (user) {
-        authScreen.style.display = 'none';
-        welcomeScreen.style.display = 'flex';
-        logoutBtn.style.display = 'block';
-        authStatus.style.display = 'flex';
-        statusText.innerText = `Connecté : ${user.email}`; // Affiche l'adresse e-mail
-    } else {
-        authScreen.style.display = 'flex';
-        welcomeScreen.style.display = 'none';
-        logoutBtn.style.display = 'none';
-        authStatus.style.display = 'none';
-    }
-};
-
-// Priorité #1: Vérifier le lien de la partie avant toute chose.
+// Gérer l'état initial de la page
 const urlParams = new URLSearchParams(window.location.search);
 const gameIdFromUrl = urlParams.get('gameId');
 
@@ -513,9 +525,6 @@ if (gameIdFromUrl) {
     joinGameSection.style.display = 'flex';
     createGameBtn.style.display = 'none';
     gameIdInput.value = gameIdFromUrl;
-} else {
-    // S'il n'y a pas d'ID de partie, on gère l'état de l'utilisateur
-    auth.onAuthStateChanged(updateUI);
 }
 
 // Logique pour les boutons de jeu
@@ -534,10 +543,6 @@ joinGameBtn.addEventListener('click', () => {
     const gameId = gameIdInput.value;
     myPlayerColor = 2;
     startSignaling(gameId);
-    
-    gameLinkSection.style.display = 'none';
-    createGameBtn.style.display = 'none';
-    joinGameSection.style.display = 'none';
 });
 
 canvas.addEventListener('mousemove', handlePointerMove);
