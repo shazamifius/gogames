@@ -47,6 +47,7 @@ let currentPlayer = 1; // 1 pour le noir, 2 pour le blanc
 let lastMove = null;
 let currentHover = null;
 let myPlayerColor = null;
+let myUid = null;
 
 let blackStonesCount = 0;
 let whiteStonesCount = 0;
@@ -483,36 +484,34 @@ logoutBtn.addEventListener('click', () => {
     auth.signOut();
 });
 
-// Gérer l'état de connexion de l'utilisateur et le flux de navigation
-// On ajoute la logique pour vérifier d'abord si un gameId existe dans l'URL
+// Gérer l'état de connexion et le flux de navigation
+// On vérifie le lien avant tout le reste
 const urlParams = new URLSearchParams(window.location.search);
 const gameIdFromUrl = urlParams.get('gameId');
 
-auth.onAuthStateChanged(user => {
-    if (gameIdFromUrl) {
-        // Si un gameId existe, on passe directement à l'écran de bienvenue (pour rejoindre la partie)
-        authScreen.style.display = 'none';
-        welcomeScreen.style.display = 'flex';
-        joinGameSection.style.display = 'flex';
-        createGameBtn.style.display = 'none';
-        gameIdInput.value = gameIdFromUrl;
-        
-    } else if (user) {
-        // Si l'utilisateur est connecté et qu'il n'y a pas de gameId, on affiche l'écran de bienvenue
-        authScreen.style.display = 'none';
-        welcomeScreen.style.display = 'flex';
-        logoutBtn.style.display = 'block';
-        authStatus.style.display = 'flex';
-        statusText.innerText = "Connecté";
-        
-    } else {
-        // Si l'utilisateur n'est pas connecté et qu'il n'y a pas de gameId, on affiche l'écran de connexion
-        authScreen.style.display = 'flex';
-        welcomeScreen.style.display = 'none';
-        logoutBtn.style.display = 'none';
-        authStatus.style.display = 'none';
-    }
-});
+if (gameIdFromUrl) {
+    authScreen.style.display = 'none';
+    welcomeScreen.style.display = 'flex';
+    joinGameSection.style.display = 'flex';
+    createGameBtn.style.display = 'none';
+    gameIdInput.value = gameIdFromUrl;
+} else {
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            authScreen.style.display = 'none';
+            welcomeScreen.style.display = 'flex';
+            logoutBtn.style.display = 'block';
+            authStatus.style.display = 'flex';
+            // On affiche l'email de l'utilisateur
+            statusText.innerText = user.email;
+        } else {
+            authScreen.style.display = 'flex';
+            welcomeScreen.style.display = 'none';
+            logoutBtn.style.display = 'none';
+            authStatus.style.display = 'none';
+        }
+    });
+}
 
 // Logique pour les boutons de jeu
 createGameBtn.addEventListener('click', () => {
