@@ -40,11 +40,15 @@ header {
 .logo {
   font-size: 1.5rem;
   margin: 0;
+  white-space: nowrap; /* Prevents text from wrapping to the next line */
 }
 
 .player-info {
   font-size: 1rem;
   color: #aaa;
+  white-space: nowrap; /* Prevents text from wrapping */
+  overflow: hidden; /* Hides any text that overflows */
+  text-overflow: ellipsis; /* Adds "..." to text that is hidden due to overflow */
 }
 
 /* Screen system */
@@ -224,11 +228,11 @@ button:active {
 /* Update the style for the link inside the logo */
 .logo a {
   color: inherit;
-  text-decoration: none;
+  text-decoration: none; /* Removes the underline from the link */
 }
 
 .logo a:hover {
-  text-decoration: underline;
+  text-decoration: none; /* Removes the underline on hover as well */
 }
 
 /* Further adjustments for very small screens (e.g., old phones) */
@@ -247,5 +251,11 @@ button:active {
 
   .join-game-box button {
     max-width: 100%;
+  }
+
+  /* Make both texts smaller on screens less than 480px wide */
+  .logo,
+  .player-info {
+    font-size: 0.8rem;
   }
 }
