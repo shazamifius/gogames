@@ -379,7 +379,6 @@ const createPeerConnection = async (isCreator) => {
         peerConnection.ondatachannel = (event) => {
             dataChannel = event.channel;
             setupDataChannelEvents();
-            // L'écran bascule pour celui qui rejoint la partie
             welcomeScreen.style.display = 'none';
             gameScreen.style.display = 'flex';
         };
@@ -400,7 +399,6 @@ const setupDataChannelEvents = () => {
     };
     dataChannel.onopen = () => {
         alert("Connexion établie ! La partie peut commencer.");
-        // Pour s'assurer que l'hôte bascule aussi
         if (myPlayerColor === 1) {
             welcomeScreen.style.display = 'none';
             gameScreen.style.display = 'flex';
@@ -485,15 +483,30 @@ logoutBtn.addEventListener('click', () => {
     auth.signOut();
 });
 
+// Gérer l'état de connexion de l'utilisateur et le flux de navigation
+// On ajoute la logique pour vérifier d'abord si un gameId existe dans l'URL
+const urlParams = new URLSearchParams(window.location.search);
+const gameIdFromUrl = urlParams.get('gameId');
+
 auth.onAuthStateChanged(user => {
-    if (user) {
+    if (gameIdFromUrl) {
+        // Si un gameId existe, on passe directement à l'écran de bienvenue (pour rejoindre la partie)
+        authScreen.style.display = 'none';
+        welcomeScreen.style.display = 'flex';
+        joinGameSection.style.display = 'flex';
+        createGameBtn.style.display = 'none';
+        gameIdInput.value = gameIdFromUrl;
+        
+    } else if (user) {
+        // Si l'utilisateur est connecté et qu'il n'y a pas de gameId, on affiche l'écran de bienvenue
         authScreen.style.display = 'none';
         welcomeScreen.style.display = 'flex';
         logoutBtn.style.display = 'block';
         authStatus.style.display = 'flex';
         statusText.innerText = "Connecté";
-        alert(`Bienvenue, ${user.email} !`);
+        
     } else {
+        // Si l'utilisateur n'est pas connecté et qu'il n'y a pas de gameId, on affiche l'écran de connexion
         authScreen.style.display = 'flex';
         welcomeScreen.style.display = 'none';
         logoutBtn.style.display = 'none';
@@ -522,15 +535,6 @@ joinGameBtn.addEventListener('click', () => {
     createGameBtn.style.display = 'none';
     joinGameSection.style.display = 'none';
 });
-
-// Gérer le cas où on arrive via un lien de partie
-const urlParams = new URLSearchParams(window.location.search);
-const gameIdFromUrl = urlParams.get('gameId');
-if (gameIdFromUrl) {
-    joinGameSection.style.display = 'flex';
-    createGameBtn.style.display = 'none';
-    gameIdInput.value = gameIdFromUrl;
-}
 
 canvas.addEventListener('mousemove', handlePointerMove);
 canvas.addEventListener('mousedown', handlePointerDown);
