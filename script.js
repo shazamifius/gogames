@@ -24,7 +24,7 @@ const nicknameScreen = document.getElementById("nicknameScreen");
 const lobbyScreen = document.getElementById("lobbyScreen");
 const gameScreen = document.getElementById("gameScreen");
 const mainPageLink = document.getElementById("mainPageLink");
-const logoutBtn = document.getElementById("logoutBtn"); // <-- New element
+const logoutBtn = document.getElementById("logoutBtn");
 
 const emailInput = document.getElementById("emailInput");
 const passwordInput = document.getElementById("passwordInput");
@@ -456,7 +456,6 @@ logoutBtn.onclick = () => {
     }).catch(err => showMessage(authMessage, err.message, "red"));
 };
 
-
 saveNicknameBtn.onclick = async() => {
     const nickname = nicknameInput.value.trim();
     if (nickname.length < 3) {
@@ -478,7 +477,7 @@ saveNicknameBtn.onclick = async() => {
 auth.onAuthStateChanged(async user => {
     if (user) {
         myUid = user.uid;
-        logoutBtn.style.display = "block"; // Show logout button
+        logoutBtn.style.display = "block";
         const snap = await db.ref("users/" + myUid).once("value");
         myNickname = snap.val() ? snap.val().nickname : null;
 
@@ -492,16 +491,32 @@ auth.onAuthStateChanged(async user => {
         myUid = null;
         myNickname = null;
         playerInfo.textContent = "Not connected";
-        logoutBtn.style.display = "none"; // Hide logout button
+        logoutBtn.style.display = "none";
         showScreen(authScreen);
     }
 });
 
 /* ================================
+   Helper function to generate a unique numeric ID
+================================= */
+async function generateGameId() {
+    let newId;
+    let isUnique = false;
+    while (!isUnique) {
+        newId = Math.floor(100000 + Math.random() * 900000);
+        const snapshot = await db.ref(`games/${newId}`).once('value');
+        if (!snapshot.exists()) {
+            isUnique = true;
+        }
+    }
+    return newId.toString();
+}
+
+/* ================================
    Lobby
 ================================= */
 createGameBtn.onclick = async() => {
-    gameId = Math.random().toString(36).substring(2, 9);
+    gameId = await generateGameId();
     myColor = 1;
 
     await db.ref("games/" + gameId).set({
@@ -516,8 +531,9 @@ createGameBtn.onclick = async() => {
     });
 
     gameLinkSection.style.display = "block";
-    gameLinkDisplay.textContent = window.location.origin + window.location.pathname + "?gameId=" + gameId;
-    showMessage(lobbyMessage, "Game created, waiting for opponent...", "lightgreen");
+    gameLinkDisplay.textContent = gameId;
+    copyLinkBtn.textContent = "Copy Code";
+    showMessage(lobbyMessage, "Game created. Share this code with your opponent!", "lightgreen");
 
     db.ref("games/" + gameId + "/players/white").on("value", s => {
         const whitePlayer = s.val();
@@ -541,8 +557,8 @@ createGameBtn.onclick = async() => {
 
 joinGameBtn.onclick = async() => {
     gameId = gameIdInput.value.trim();
-    if (!gameId) {
-        showMessage(lobbyMessage, "Please enter a game ID.", "red");
+    if (!gameId || isNaN(gameId)) {
+        showMessage(lobbyMessage, "Please enter a valid numeric game code.", "red");
         return;
     }
 
@@ -571,7 +587,6 @@ joinGameBtn.onclick = async() => {
     showMessage(lobbyMessage, "Joined game!", "lightgreen");
     showScreen(gameScreen);
 
-    // Add listeners for signaling
     db.ref("games/" + gameId + "/creatorCandidates").on("child_added", s => {
         peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
     });
@@ -579,7 +594,7 @@ joinGameBtn.onclick = async() => {
 
 copyLinkBtn.onclick = () => {
     navigator.clipboard.writeText(gameLinkDisplay.textContent);
-    showMessage(lobbyMessage, "Link copied!", "lightgreen");
+    showMessage(lobbyMessage, "Code copied!", "lightgreen");
 };
 
 /* ================================
