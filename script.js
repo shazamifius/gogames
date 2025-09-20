@@ -484,17 +484,16 @@ loginBtn.addEventListener('click', () => {
 
 logoutBtn.addEventListener('click', () => {
     auth.signOut();
-    updateUI(null);
 });
 
-// Nouvelle fonction pour mettre à jour l'interface
+// Gérer l'état de l'interface en fonction de l'utilisateur
 const updateUI = (user) => {
     if (user) {
         authScreen.style.display = 'none';
         welcomeScreen.style.display = 'flex';
         logoutBtn.style.display = 'block';
         authStatus.style.display = 'flex';
-        statusText.innerText = user.email; // On affiche l'email comme pseudo pour l'instant
+        statusText.innerText = `Connecté : ${user.email}`; // Affiche l'adresse e-mail
     } else {
         authScreen.style.display = 'flex';
         welcomeScreen.style.display = 'none';
@@ -503,20 +502,20 @@ const updateUI = (user) => {
     }
 };
 
-// Gérer l'état initial de la page en fonction du lien
+// Priorité #1: Vérifier le lien de la partie avant toute chose.
 const urlParams = new URLSearchParams(window.location.search);
 const gameIdFromUrl = urlParams.get('gameId');
 
 if (gameIdFromUrl) {
-    // Si un gameId est présent, on affiche directement l'écran pour rejoindre
+    // S'il y a un ID de partie dans l'URL, on affiche directement l'écran pour rejoindre
     authScreen.style.display = 'none';
     welcomeScreen.style.display = 'flex';
     joinGameSection.style.display = 'flex';
     createGameBtn.style.display = 'none';
     gameIdInput.value = gameIdFromUrl;
 } else {
-    // Sinon, on montre l'écran de connexion par défaut
-    updateUI(auth.currentUser);
+    // S'il n'y a pas d'ID de partie, on gère l'état de l'utilisateur
+    auth.onAuthStateChanged(updateUI);
 }
 
 // Logique pour les boutons de jeu
