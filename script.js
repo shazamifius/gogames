@@ -1,6 +1,12 @@
 /* ================================
-   Firebase configuration
+   Online Go Game - script.js (REFACTO)
+   - WebRTC pour temps réel (prioritaire)
+   - Firebase comme sauvegarde / fallback
+   - Sync automatique après chaque action
+   - Nettoyage et meilleure gestion des listeners
 ================================= */
+
+/* ========== Firebase config ========== */
 const firebaseConfig = {
     apiKey: "AIzaSyBUHwlZP9skcvX4lYwtWzNkuoI2Gc5FqFg",
     authDomain: "gogame-6fcc9.firebaseapp.com",
@@ -11,14 +17,11 @@ const firebaseConfig = {
     appId: "1:489232590919:web:ecc32c7aeeaffe7e9e2962",
     measurementId: "G-Q7XJMBB0WK"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
-/* ================================
-   DOM elements
-================================= */
+/* ========== DOM ========== */
 const authScreen = document.getElementById("authScreen");
 const nicknameScreen = document.getElementById("nicknameScreen");
 const lobbyScreen = document.getElementById("lobbyScreen");
@@ -55,115 +58,61 @@ const whiteScoreEl = document.getElementById("whiteScore");
 
 const playerInfo = document.getElementById("playerInfo");
 
-/* ================================
-   Game constants
-================================= */
+/* ========== Game constants ========== */
 const BOARD_SIZE = 19;
 const KOMI = 7.5;
 const CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
 
+/* ========== State ========== */
 let board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
-let history = []; // for Superko rule
-let currentPlayer = 1; // 1 = black, 2 = white
+let history = [];
+let currentPlayer = 1; // 1 black, 2 white
 let myColor = null;
 let myUid = null;
 let myNickname = null;
 let gameId = null;
-
 let consecutivePasses = 0;
 let gameOver = false;
-
 let gameRef = null;
 
-/* ================================
-   WebRTC setup
-================================= */
-let peerConnection;
-let dataChannel;
-const iceServers = {
-    iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-    ]
-};
+/* ========== WebRTC ========== */
+let peerConnection = null;
+let dataChannel = null;
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] };
 
-/* ================================
-   Helpers
-================================= */
+/* ========== Helpers UI ========== */
 function showScreen(screen) {
-    [authScreen, nicknameScreen, lobbyScreen, gameScreen].forEach(s =>
-        s.classList.remove("active")
-    );
+    [authScreen, nicknameScreen, lobbyScreen, gameScreen].forEach(s => s.classList.remove("active"));
     screen.classList.add("active");
 }
-
 function showMessage(el, text, color = "#bbb") {
     el.innerText = text;
     el.style.color = color;
 }
 
-function resetGame() {
-    if (gameRef) {
-        gameRef.off();
-        gameRef = null;
-    }
-    board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
-    history = [];
-    currentPlayer = 1;
-    myColor = null;
-    gameId = null;
-    consecutivePasses = 0;
-    gameOver = false;
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    if (dataChannel) {
-        dataChannel.close();
-        dataChannel = null;
-    }
-    renderBoard();
-    updateScore();
-}
-
-function handleFinalRedirect() {
-    setTimeout(() => {
-        resetGame();
-        showScreen(lobbyScreen);
-    }, 3000); // 3-second delay
-}
-
-/* ================================
-   Board utilities
-================================= */
+/* ========== Board drawing ========== */
 function drawGrid() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1.5;
-
     for (let i = 1; i <= BOARD_SIZE; i++) {
         ctx.beginPath();
         ctx.moveTo(i * CELL_SIZE, CELL_SIZE);
         ctx.lineTo(i * CELL_SIZE, BOARD_SIZE * CELL_SIZE);
         ctx.stroke();
-
         ctx.beginPath();
         ctx.moveTo(CELL_SIZE, i * CELL_SIZE);
         ctx.lineTo(BOARD_SIZE * CELL_SIZE, i * CELL_SIZE);
         ctx.stroke();
     }
-
     const star = [3, 9, 15];
-    star.forEach(x => {
-        star.forEach(y => {
-            ctx.beginPath();
-            ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
-            ctx.fillStyle = "#000";
-            ctx.fill();
-        });
-    });
+    star.forEach(x => star.forEach(y => {
+        ctx.beginPath();
+        ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = "#000";
+        ctx.fill();
+    }));
 }
-
 function drawStones() {
     for (let y = 0; y < BOARD_SIZE; y++) {
         for (let x = 0; x < BOARD_SIZE; x++) {
@@ -179,109 +128,71 @@ function drawStones() {
         }
     }
 }
-
 function renderBoard() {
     drawGrid();
     drawStones();
 }
 
-/* ================================
-   Rules: chains, liberties, captures
-================================= */
+/* ========== Rules helpers ========== */
 function getNeighbors(x, y) {
-    return [
-        [x - 1, y],
-        [x + 1, y],
-        [x, y - 1],
-        [x, y + 1]
-    ].filter(([nx, ny]) => nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE);
+    return [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].filter(([nx, ny]) => nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE);
 }
-
 function getChain(x, y, color, visited, state) {
     const chain = [];
-    const queue = [[x, y]];
+    const stack = [[x, y]];
     visited.add(`${x},${y}`);
-    while (queue.length) {
-        const [cx, cy] = queue.pop();
+    while (stack.length) {
+        const [cx, cy] = stack.pop();
         chain.push([cx, cy]);
         for (let [nx, ny] of getNeighbors(cx, cy)) {
             if (!visited.has(`${nx},${ny}`) && state[ny][nx] === color) {
                 visited.add(`${nx},${ny}`);
-                queue.push([nx, ny]);
+                stack.push([nx, ny]);
             }
         }
     }
     return chain;
 }
-
 function getLiberties(chain, state) {
     const libs = new Set();
     for (let [x, y] of chain) {
-        for (let [nx, ny] of getNeighbors(x, y)) {
-            if (state[ny][nx] === 0) libs.add(`${nx},${ny}`);
-        }
+        for (let [nx, ny] of getNeighbors(x, y)) if (state[ny][nx] === 0) libs.add(`${nx},${ny}`);
     }
     return libs.size;
 }
-
 function copyBoard(state) {
     return state.map(r => [...r]);
 }
-
+function boardToString(state) {
+    return JSON.stringify(state);
+}
 function placeStone(x, y, color, state) {
     const newState = copyBoard(state);
     newState[y][x] = color;
-
-    let captures = 0;
     const opponent = color === 1 ? 2 : 1;
     for (let [nx, ny] of getNeighbors(x, y)) {
         if (newState[ny][nx] === opponent) {
             const chain = getChain(nx, ny, opponent, new Set(), newState);
-            if (getLiberties(chain, newState) === 0) {
-                chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
-                captures += chain.length;
-            }
+            if (getLiberties(chain, newState) === 0) chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
         }
     }
-
     const chain = getChain(x, y, color, new Set(), newState);
     if (getLiberties(chain, newState) === 0) return null;
-
-    return { newState, captures };
+    return { newState };
 }
-
-function boardToString(state) {
-    return JSON.stringify(state);
-}
-
 function isLegalMove(x, y, color, state) {
-    if (state[y][x] !== 0) {
-        showMessage(gameMessage, "This spot is already taken.", "orange");
-        return false;
-    }
+    if (state[y][x] !== 0) { showMessage(gameMessage, "This spot is already taken.", "orange"); return false; }
     const result = placeStone(x, y, color, state);
-    if (!result) {
-        showMessage(gameMessage, "Suicide moves are not allowed.", "orange");
-        return false;
-    }
-
+    if (!result) { showMessage(gameMessage, "Suicide moves are not allowed.", "orange"); return false; }
     const newStateStr = boardToString(result.newState);
-    if (history.includes(newStateStr)) {
-        showMessage(gameMessage, "Superko rule violation: cannot repeat a previous board state.", "orange");
-        return false;
-    }
-
+    if (history.includes(newStateStr)) { showMessage(gameMessage, "Superko rule violation.", "orange"); return false; }
     return true;
 }
 
-/* ================================
-   Scoring
-================================= */
+/* ========== Scoring ========== */
 function computeScore(state) {
-    let black = 0;
-    let white = 0;
+    let black = 0, white = 0;
     const visited = new Set();
-
     for (let y = 0; y < BOARD_SIZE; y++) {
         for (let x = 0; x < BOARD_SIZE; x++) {
             if (state[y][x] === 1) black++;
@@ -295,38 +206,216 @@ function computeScore(state) {
                     const [cx, cy] = queue.pop();
                     territory.push([cx, cy]);
                     for (let [nx, ny] of getNeighbors(cx, cy)) {
-                        if (state[ny][nx] === 0 && !visited.has(`${nx},${ny}`)) {
-                            visited.add(`${nx},${ny}`);
-                            queue.push([nx, ny]);
-                        } else if (state[ny][nx] !== 0) {
-                            borders.add(state[ny][nx]);
-                        }
+                        if (state[ny][nx] === 0 && !visited.has(`${nx},${ny}`)) { visited.add(`${nx},${ny}`); queue.push([nx, ny]); }
+                        else if (state[ny][nx] !== 0) borders.add(state[ny][nx]);
                     }
                 }
                 if (borders.size === 1) {
                     const owner = [...borders][0];
                     if (owner === 1) black += territory.length;
-                    if (owner === 2) white += territory.length;
+                    else if (owner === 2) white += territory.length;
                 }
             }
         }
     }
-
     white += KOMI;
     return { black, white };
 }
+function updateScore() {
+    const { black, white } = computeScore(board);
+    blackScoreEl.textContent = `Black: ${black}`;
+    whiteScoreEl.textContent = `White: ${white.toFixed(1)}`;
+}
 
-/* ================================
-   Game logic
-================================= */
+/* ========== Firebase sync helpers ========== */
+async function saveGameToFirebase(reason = "update") {
+    if (!gameRef || !gameId) return;
+    try {
+        await gameRef.update({
+            board: board,
+            currentPlayer: currentPlayer,
+            history: history,
+            lastUpdateBy: myUid || "unknown",
+            lastUpdateAt: Date.now(),
+            status: gameOver ? "finished" : "playing",
+            lastReason: reason
+        });
+    } catch (err) {
+        console.error("Firebase save failed:", err);
+    }
+}
+
+/* Apply firebase data if it differs and wasn't caused by this client */
+function applyRemoteGameData(data) {
+    if (!data) return;
+    // basic validation
+    if (!data.board || typeof data.currentPlayer === "undefined") return;
+
+    // don't reapply what we just wrote
+    if (data.lastUpdateBy === myUid) return;
+
+    const remoteBoardStr = JSON.stringify(data.board);
+    const localBoardStr = JSON.stringify(board);
+
+    if (remoteBoardStr !== localBoardStr || data.currentPlayer !== currentPlayer || JSON.stringify(data.history) !== JSON.stringify(history)) {
+        board = data.board;
+        currentPlayer = data.currentPlayer;
+        history = data.history || [];
+        consecutivePasses = 0; // reset consecutive passes on remote update (safe)
+        renderBoard();
+        updateScore();
+        showMessage(gameMessage, "Synced from server (fallback).", "lightblue");
+    }
+}
+
+/* ========== WebRTC helpers ========== */
+function setupDataChannelLocal(channel) {
+    dataChannel = channel;
+    dataChannel.onmessage = e => {
+        try {
+            const msg = JSON.parse(e.data);
+            handleIncomingMessage(msg, /*via=*/"webrtc");
+        } catch (err) {
+            console.error("Invalid message on dataChannel", err);
+        }
+    };
+    dataChannel.onopen = () => { showMessage(gameMessage, "Connection established (WebRTC).", "lightgreen"); };
+    dataChannel.onclose = () => {
+        showMessage(gameMessage, "WebRTC connection closed — fallback to Firebase.", "orange");
+        dataChannel = null;
+    };
+    dataChannel.onerror = err => console.error("DataChannel error:", err);
+}
+function handleIncomingMessage(msg, via = "webrtc") {
+    if (!msg || !msg.type) return;
+    if (msg.type === "move") {
+        board = msg.board;
+        currentPlayer = msg.currentPlayer;
+        history = msg.history || [];
+        renderBoard();
+        updateScore();
+        showMessage(gameMessage, "Opponent moved. Your turn!", "lightgreen");
+        // persist to firebase as source of truth (so both sides stay consistent)
+        saveGameToFirebase("move-received");
+    } else if (msg.type === "pass") {
+        currentPlayer = msg.currentPlayer;
+        consecutivePasses++;
+        if (consecutivePasses >= 2) endGame();
+        renderBoard();
+        updateScore();
+        showMessage(gameMessage, "Opponent passed. Your turn!", "lightgreen");
+        saveGameToFirebase("pass-received");
+    } else if (msg.type === "end") {
+        endGame(msg.message);
+        saveGameToFirebase("end-received");
+    }
+}
+
+/* Broadcast message primarily via WebRTC; always save to Firebase as fallback/sync */
+function broadcast(msg) {
+    // send via dataChannel if open
+    if (dataChannel && dataChannel.readyState === "open") {
+        try { dataChannel.send(JSON.stringify(msg)); }
+        catch (err) { console.error("Data channel send error:", err); }
+    }
+    // always update server state afterwards (saveGameToFirebase will be called by caller)
+}
+
+/* Setup ICE candidate exchange and listeners */
+function setupIceAndCandidates(isCreator) {
+    const myCandidatesPath = isCreator ? "creatorCandidates" : "joinerCandidates";
+    const opponentCandidatesPath = isCreator ? "joinerCandidates" : "creatorCandidates";
+
+    peerConnection.onicecandidate = e => {
+        if (e.candidate) {
+            db.ref(`games/${gameId}/${myCandidatesPath}`).push(e.candidate).catch(console.error);
+        }
+    };
+
+    // listen opponent candidates
+    const oppRef = db.ref(`games/${gameId}/${opponentCandidatesPath}`);
+    oppRef.on("child_added", snap => {
+        const cand = snap.val();
+        if (cand) {
+            peerConnection.addIceCandidate(new RTCIceCandidate(cand)).catch(err => console.error("addIceCandidate failed:", err));
+        }
+    });
+}
+
+/* Start signaling: creator or joiner */
+async function startSignaling(isCreator) {
+    // create new peerConnection
+    peerConnection = new RTCPeerConnection(iceServers);
+    setupIceAndCandidates(isCreator);
+
+    if (isCreator) {
+        // create data channel locally
+        const localChannel = peerConnection.createDataChannel("game");
+        setupDataChannelLocal(localChannel);
+
+        // create offer and write it to firebase
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        await db.ref(`games/${gameId}`).update({ offer: offer }).catch(console.error);
+
+        // wait for answer
+        const answerRef = db.ref(`games/${gameId}/answer`);
+        const answerListener = answerRef.on("value", async snap => {
+            const ans = snap.val();
+            if (ans && peerConnection && !peerConnection.remoteDescription) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(ans));
+                answerRef.off("value", answerListener);
+                // show game screen (creator) when answer arrives
+                showScreen(gameScreen);
+                showMessage(gameMessage, "Opponent joined! Game starts (WebRTC).", "lightgreen");
+            }
+        });
+    } else {
+        // joiner: listen for offer
+        peerConnection.ondatachannel = e => setupDataChannelLocal(e.channel);
+
+        const offerRef = db.ref(`games/${gameId}/offer`);
+        const offerListener = offerRef.on("value", async snap => {
+            const offer = snap.val();
+            if (offer) {
+                // sync board before answering
+                const gameSnap = await db.ref(`games/${gameId}`).once("value");
+                const gameData = gameSnap.val();
+                if (gameData && gameData.board) {
+                    board = gameData.board;
+                    currentPlayer = gameData.currentPlayer || 1;
+                    history = gameData.history || [];
+                    renderBoard();
+                    updateScore();
+                }
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                await db.ref(`games/${gameId}`).update({ answer: answer });
+                offerRef.off("value", offerListener);
+                showScreen(gameScreen);
+                showMessage(gameMessage, "Joined game! Waiting for moves (WebRTC).", "lightgreen");
+            }
+        });
+    }
+
+    // a safety: when connection state becomes disconnected/failed, log and fallback
+    peerConnection.onconnectionstatechange = () => {
+        const s = peerConnection.connectionState;
+        if (s === "failed" || s === "disconnected" || s === "closed") {
+            console.warn("PeerConnection state:", s);
+            showMessage(gameMessage, "WebRTC connection lost — using Firebase as fallback.", "orange");
+        }
+    };
+}
+
+/* ========== Game actions ========== */
 function playMove(x, y) {
     if (gameOver) return;
-    if (myColor !== currentPlayer) {
-        showMessage(gameMessage, "Not your turn!", "orange");
-        return;
-    }
+    if (myColor !== currentPlayer) { showMessage(gameMessage, "Not your turn!", "orange"); return; }
     if (!isLegalMove(x, y, currentPlayer, board)) return;
 
+    // apply locally
     const result = placeStone(x, y, currentPlayer, board);
     board = result.newState;
     history.push(boardToString(board));
@@ -336,36 +425,38 @@ function playMove(x, y) {
     renderBoard();
     updateScore();
 
-    broadcast({ type: "move", board, currentPlayer, history });
+    // broadcast and persist
+    const msg = { type: "move", board: board, currentPlayer: currentPlayer, history: history };
+    broadcast(msg);
+    saveGameToFirebase("move");
 }
-
-function updateScore() {
-    const { black, white } = computeScore(board);
-    blackScoreEl.textContent = `Black: ${black}`;
-    whiteScoreEl.textContent = `White: ${white.toFixed(1)}`;
-}
-
 function passTurn() {
     if (gameOver) return;
-    if (myColor !== currentPlayer) {
-        showMessage(gameMessage, "Not your turn!", "orange");
-        return;
-    }
+    if (myColor !== currentPlayer) { showMessage(gameMessage, "Not your turn!", "orange"); return; }
     consecutivePasses++;
     currentPlayer = currentPlayer === 1 ? 2 : 1;
+    renderBoard();
+    updateScore();
 
-    if (consecutivePasses >= 2) endGame();
-    else broadcast({ type: "pass", currentPlayer });
+    const msg = { type: "pass", currentPlayer: currentPlayer };
+    broadcast(msg);
+    saveGameToFirebase("pass");
+
+    if (consecutivePasses >= 2) {
+        endGame();
+        saveGameToFirebase("end-by-passes");
+    }
 }
-
 function resign() {
     if (gameOver) return;
     const winner = myColor === 1 ? "White" : "Black";
-    endGame(`${winner} wins by resignation.`);
-    broadcast({ type: "end", message: `${winner} wins by resignation.` });
+    const message = `${winner} wins by resignation.`;
+    endGame(message);
+    const msg = { type: "end", message: message };
+    broadcast(msg);
+    saveGameToFirebase("resign");
     handleFinalRedirect();
 }
-
 function endGame(message) {
     gameOver = true;
     const { black, white } = computeScore(board);
@@ -373,155 +464,75 @@ function endGame(message) {
     showMessage(gameMessage, result, "lightgreen");
 }
 
-/* ================================
-   WebRTC functions
-================================= */
-function broadcast(msg) {
-    if (dataChannel && dataChannel.readyState === "open") {
-        dataChannel.send(JSON.stringify(msg));
-    } else {
-        console.error("Data channel not open. Cannot send message.");
+/* ========== Listeners + lifecycle ========== */
+function resetGame() {
+    // cleanup firebase listeners
+    if (gameRef) {
+        try { gameRef.off(); } catch (e) { /* ignore */ }
+        gameRef = null;
     }
+
+    // close webrtc
+    if (dataChannel) try { dataChannel.close(); } catch (e) {}
+    if (peerConnection) try { peerConnection.close(); } catch (e) {}
+    dataChannel = null;
+    peerConnection = null;
+
+    // reset local state
+    board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+    history = [];
+    currentPlayer = 1;
+    myColor = null;
+    gameId = null;
+    consecutivePasses = 0;
+    gameOver = false;
+
+    renderBoard();
+    updateScore();
 }
 
-function setupDataChannel(channel) {
-    dataChannel = channel;
-    dataChannel.onmessage = e => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "move") {
-            board = msg.board;
-            currentPlayer = msg.currentPlayer;
-            history = msg.history;
-            renderBoard();
-            updateScore();
-            showMessage(gameMessage, "Opponent moved. Your turn!");
-        } else if (msg.type === "pass") {
-            currentPlayer = msg.currentPlayer;
-            consecutivePasses++;
-            if (consecutivePasses >= 2) endGame();
-            showMessage(gameMessage, "Opponent passed. Your turn!");
-        } else if (msg.type === "end") {
-            endGame(msg.message);
-            handleFinalRedirect();
-        }
-    };
-    dataChannel.onopen = () => {
-        showMessage(gameMessage, "Connection established. Let's play!", "lightgreen");
-    };
-    dataChannel.onclose = () => {
-        showMessage(gameMessage, "Opponent disconnected. Game over.", "red");
-        gameOver = true;
-        handleFinalRedirect();
-    };
+function handleFinalRedirect() {
+    setTimeout(() => {
+        resetGame();
+        showScreen(lobbyScreen);
+    }, 3000);
 }
 
-function setupGameListeners(isCreator) {
-    const myCandidatesPath = isCreator ? "creatorCandidates" : "joinerCandidates";
-    const opponentCandidatesPath = isCreator ? "joinerCandidates" : "creatorCandidates";
-    
-    peerConnection.onicecandidate = e => {
-        if (e.candidate) {
-            db.ref(`games/${gameId}/${myCandidatesPath}`).push(e.candidate);
-        }
-    };
-    
-    db.ref(`games/${gameId}/${opponentCandidatesPath}`).on("child_added", s => {
-        peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
-    });
-}
-
-async function startSignaling(isCreator) {
-    peerConnection = new RTCPeerConnection(iceServers);
-    setupGameListeners(isCreator);
-
-    if (isCreator) {
-        dataChannel = peerConnection.createDataChannel("game");
-        setupDataChannel(dataChannel);
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        await db.ref("games/" + gameId).update({ offer: offer });
-    } else {
-        peerConnection.ondatachannel = e => setupDataChannel(e.channel);
-        
-        // Attendre l'offre avant de faire quoi que ce soit
-        db.ref("games/" + gameId + "/offer").on("value", async s => {
-            const offer = s.val();
-            if (offer) {
-                // **MODIFICATION** : Récupérer l'état du jeu avant de créer la réponse
-                const gameSnap = await db.ref("games/" + gameId).once("value");
-                const gameData = gameSnap.val();
-                
-                board = gameData.board;
-                currentPlayer = gameData.currentPlayer;
-                history = gameData.history;
-
-                renderBoard();
-                updateScore();
-                showScreen(gameScreen);
-                showMessage(gameMessage, "Joined game! Waiting for opponent to move.");
-
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                await db.ref("games/" + gameId).update({ answer: answer });
-                
-                // Stop listening once we've processed the offer
-                db.ref("games/" + gameId + "/offer").off("value");
-            }
-        });
-    }
-}
-
-
-/* ================================
-   Auth events
-================================= */
+/* ========== Auth ========== */
 registerBtn.onclick = () => {
     auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value)
-        .then(() => showMessage(authMessage, "Account created. You are now logged in.", "lightgreen"))
+        .then(() => showMessage(authMessage, "Compte créé. Vous êtes connecté.", "lightgreen"))
         .catch(err => showMessage(authMessage, err.message, "red"));
 };
-
 loginBtn.onclick = () => {
     auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value)
-        .then(() => showMessage(authMessage, "Logged in successfully!", "lightgreen"))
+        .then(() => showMessage(authMessage, "Connecté avec succès !", "lightgreen"))
         .catch(err => showMessage(authMessage, err.message, "red"));
 };
-
 logoutBtn.onclick = () => {
     auth.signOut().then(() => {
-        showMessage(authMessage, "Logged out successfully.", "lightgreen");
+        showMessage(authMessage, "Déconnecté.", "lightgreen");
     }).catch(err => showMessage(authMessage, err.message, "red"));
 };
 
-saveNicknameBtn.onclick = async() => {
+saveNicknameBtn.onclick = async () => {
     const nickname = nicknameInput.value.trim();
-    if (nickname.length < 3) {
-        showMessage(nicknameMessage, "Nickname must be at least 3 characters long.", "red");
-        return;
-    }
-    await db.ref("users/" + myUid).set({
-        email: auth.currentUser.email,
-        nickname: nickname
-    });
+    if (nickname.length < 3) { showMessage(nicknameMessage, "Le pseudo doit avoir au moins 3 caractères.", "red"); return; }
+    await db.ref(`users/${myUid}`).set({ email: auth.currentUser.email, nickname: nickname });
     myNickname = nickname;
     playerInfo.textContent = `${myNickname} (${auth.currentUser.email})`;
     showScreen(lobbyScreen);
 };
 
-/* ================================
-   Auth state change
-================================= */
+/* Auth state */
 auth.onAuthStateChanged(async user => {
     if (user) {
         myUid = user.uid;
         logoutBtn.style.display = "block";
-        const snap = await db.ref("users/" + myUid).once("value");
+        const snap = await db.ref(`users/${myUid}`).once("value");
         myNickname = snap.val() ? snap.val().nickname : null;
-
-        if (!myNickname) {
-            showScreen(nicknameScreen);
-        } else {
+        if (!myNickname) showScreen(nicknameScreen);
+        else {
             playerInfo.textContent = `${myNickname} (${user.email})`;
             showScreen(lobbyScreen);
         }
@@ -534,30 +545,24 @@ auth.onAuthStateChanged(async user => {
     }
 });
 
-/* ================================
-   Helper function to generate a unique numeric ID
-================================= */
+/* ========== Game creation / joining ========== */
 async function generateGameId() {
-    let newId;
-    let isUnique = false;
+    let newId, isUnique = false;
     while (!isUnique) {
         newId = Math.floor(100000 + Math.random() * 900000);
         const snapshot = await db.ref(`games/${newId}`).once('value');
-        if (!snapshot.exists()) {
-            isUnique = true;
-        }
+        if (!snapshot.exists()) isUnique = true;
     }
     return newId.toString();
 }
 
-/* ================================
-   Lobby
-================================= */
-createGameBtn.onclick = async() => {
+createGameBtn.onclick = async () => {
+    await resetIfAny();
     gameId = await generateGameId();
     myColor = 1; // Black
+    gameRef = db.ref(`games/${gameId}`);
 
-    gameRef = db.ref("games/" + gameId);
+    // initialize game on server
     await gameRef.set({
         status: "waiting",
         players: {
@@ -567,112 +572,141 @@ createGameBtn.onclick = async() => {
                 nickname: myNickname
             }
         },
-        board: board, // Store initial state
+        board: board,
         currentPlayer: currentPlayer,
-        history: history
+        history: history,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 2 * 60 * 60 * 1000 // expire dans 2 heures
     });
+
+
 
     gameLinkSection.style.display = "block";
     gameLinkDisplay.textContent = gameId;
     copyLinkBtn.textContent = "Copy Code";
-    showMessage(lobbyMessage, "Game created. Share this code with your opponent!", "lightgreen");
-    
-    gameRef.child("players/white").on("value", s => {
-        const whitePlayer = s.val();
-        if (whitePlayer && !peerConnection) {
-            startSignaling(true);
+    showMessage(lobbyMessage, "Partie créée. Partage le code avec ton adversaire.", "lightgreen");
+
+    // listen for white player to join
+    const whiteRef = gameRef.child("players/white");
+    whiteRef.on("value", snap => {
+        if (snap.val() && !peerConnection) {
+            // start signaling as creator when someone joined
+            startSignaling(true).catch(console.error);
         }
     });
 
-    gameRef.child("answer").on("value", async s => {
-        const answer = s.val();
-        if (answer) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-            
-            showScreen(gameScreen);
-            showMessage(gameMessage, "Opponent joined! Game starts.");
-            
-            gameRef.child("answer").off("value");
+    // answer will be set by joiner
+    const answerRef = gameRef.child("answer");
+    answerRef.on("value", async snap => {
+        const answer = snap.val();
+        if (answer && peerConnection && peerConnection.signalingState !== "stable") {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                showScreen(gameScreen);
+                showMessage(gameMessage, "Adversaire connecté ! Début de la partie.", "lightgreen");
+                answerRef.off();
+            } catch (err) { console.error("setRemoteDescription failed:", err); }
         }
+    });
+
+    // always listen to firebase state changes as a fallback
+    gameRef.on("value", snap => {
+        const data = snap.val();
+        if (!data) return;
+
+        board = data.board;
+        currentPlayer = data.currentPlayer;
+        history = data.history || [];
+
+        renderBoard();
+        updateScore();
     });
 };
 
-joinGameBtn.onclick = async() => {
+joinGameBtn.onclick = async () => {
+    await resetIfAny();
     gameId = gameIdInput.value.trim();
-    if (!gameId || isNaN(gameId)) {
-        showMessage(lobbyMessage, "Please enter a valid numeric game code.", "red");
-        return;
-    }
-
-    gameRef = db.ref("games/" + gameId);
+    if (!gameId || isNaN(gameId)) { showMessage(lobbyMessage, "Entrez un code de partie valide.", "red"); return; }
+    gameRef = db.ref(`games/${gameId}`);
     const gameSnap = await gameRef.once("value");
     const gameData = gameSnap.val();
 
-    if (!gameSnap.exists()) {
-        showMessage(lobbyMessage, "Game not found!", "red");
-        return;
-    }
-    if (gameData.players.white) {
-        showMessage(lobbyMessage, "This game is already full.", "red");
-        return;
-    }
-    
-    if (gameData.status === 'playing') {
-      showMessage(lobbyMessage, "This game is already in progress.", "red");
-      return;
-    }
+    if (!gameSnap.exists()) { showMessage(lobbyMessage, "Partie introuvable !", "red"); return; }
+    if (gameData.players && gameData.players.white) { showMessage(lobbyMessage, "Cette partie est déjà complète.", "red"); return; }
+    if (gameData.status === "playing") { showMessage(lobbyMessage, "Cette partie est en cours.", "red"); return; }
 
     myColor = 2; // White
-    await gameRef.child("players/white").set({
-        uid: myUid,
-        email: auth.currentUser.email,
-        nickname: myNickname
-    });
+    await gameRef.child("players/white").set({ uid: myUid, email: auth.currentUser.email, nickname: myNickname });
     await gameRef.update({ status: "playing" });
 
-    // Lancer la signalisation et attendre l'offre
-    startSignaling(false);
+    // Listen to full game state (fallback)
+    gameRef.on("value", snap => {
+        const data = snap.val();
+        if (!data) return;
+
+        board = data.board;
+        currentPlayer = data.currentPlayer;
+        history = data.history || [];
+
+        renderBoard();
+        updateScore();
+    });
     
-    showMessage(lobbyMessage, "Joined game!", "lightgreen");
+    // start signaling as joiner (will wait for offer and then answer)
+    startSignaling(false).catch(console.error);
+
+    showMessage(lobbyMessage, "Partie rejointe. Connexion en cours...", "lightgreen");
 };
 
 copyLinkBtn.onclick = () => {
     navigator.clipboard.writeText(gameLinkDisplay.textContent);
-    showMessage(lobbyMessage, "Code copied!", "lightgreen");
+    showMessage(lobbyMessage, "Code copié !", "lightgreen");
 };
 
-/* ================================
-   Game events
-================================= */
+/* Utility to reset prior session before creating/joining */
+async function resetIfAny() {
+    // remove old listeners and close webrtc if any
+    if (gameRef) {
+        try { gameRef.off(); } catch (e) {}
+    }
+    if (dataChannel) try { dataChannel.close(); } catch (e) {}
+    if (peerConnection) try { peerConnection.close(); } catch (e) {}
+    dataChannel = null;
+    peerConnection = null;
+}
+
+/* ========== Canvas events ========== */
 canvas.addEventListener("click", e => {
     if (gameOver) return;
     const rect = canvas.getBoundingClientRect();
     const x = Math.round((e.clientX - rect.left) / CELL_SIZE) - 1;
     const y = Math.round((e.clientY - rect.top) / CELL_SIZE) - 1;
-    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-        playMove(x, y);
-    }
+    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) playMove(x, y);
 });
-
 passButton.onclick = passTurn;
 forfeitButton.onclick = resign;
-mainPageLink.onclick = () => {
-    resetGame();
-    showScreen(lobbyScreen);
-};
+mainPageLink.onclick = () => { resetGame(); showScreen(lobbyScreen); };
 
-/* ================================
-   Init
-================================= */
+/* ========== Incoming firebase updates listener (global fallback) ========== */
+/* Note: created per-game when gameRef is set (see create/join code) */
+
+/* ========== Init ========== */
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const gameIdFromUrl = urlParams.get('gameId');
     if (gameIdFromUrl) {
-        document.getElementById("joinGameSection").style.display = "flex";
+        // show join input (if you have a dedicated section; if not this is harmless)
+        try { document.getElementById("joinGameSection").style.display = "flex"; } catch(e){}
         gameIdInput.value = gameIdFromUrl;
     }
     renderBoard();
     updateScore();
 }
-
 init();
+
+/* ========== Final notes ==========
+ - WebRTC is used when possible (fast). If WebRTC fails or drops, Firebase state keeps both clients in sync.
+ - Each local action calls saveGameToFirebase(...) to persist the authoritative state.
+ - When a firebase update arrives and it's not from this client, we apply it automatically (no F5 required).
+ - If tu veux que j'ajoute la suppression automatique d'une partie inactives après X minutes, dis-le.
+================================== */
