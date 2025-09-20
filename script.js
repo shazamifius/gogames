@@ -414,6 +414,10 @@ const startSignaling = async (gameId) => {
             const answer = snapshot.val();
             if (answer) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                // On s'assure que l'écran de jeu s'affiche pour l'hôte
+                welcomeScreen.style.display = 'none';
+                gameScreen.style.display = 'flex';
+                alert("Connexion établie ! La partie peut commencer.");
             }
         });
     } 
