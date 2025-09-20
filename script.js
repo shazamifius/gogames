@@ -1,562 +1,466 @@
-// Ton code Firebase
+/* ================================
+   Firebase configuration
+================================= */
 const firebaseConfig = {
-    apiKey: "AIzaSyBUHwlZP9skcvX4lYwtWzNkuoI2Gc5FqFg",
-    authDomain: "gogame-6fcc9.firebaseapp.com",
-    databaseURL: "https://gogame-6fcc9-default-rtdb.firebaseio.com",
-    projectId: "gogame-6fcc9",
-    storageBucket: "gogame-6fcc9.firebasestorage.app",
-    messagingSenderId: "489232590919",
-    appId: "1:489232590919:web:ecc32c7aeeaffe7e9e2962",
-    measurementId: "G-Q7XJMBB0WK"
+  apiKey: "AIzaSyBUHwlZP9skcvX4lYwtWzNkuoI2Gc5FqFg",
+  authDomain: "gogame-6fcc9.firebaseapp.com",
+  databaseURL: "https://gogame-6fcc9-default-rtdb.firebaseio.com",
+  projectId: "gogame-6fcc9",
+  storageBucket: "gogame-6fcc9.appspot.com", // FIXED
+  messagingSenderId: "489232590919",
+  appId: "1:489232590919:web:ecc32c7aeeaffe7e9e2962",
+  measurementId: "G-Q7XJMBB0WK"
 };
 
-// Initialise Firebase
 firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
+const db = firebase.database();
 const auth = firebase.auth();
 
-// Éléments du DOM
-const authScreen = document.getElementById('authScreen');
-const welcomeScreen = document.getElementById('welcomeScreen');
-const gameScreen = document.getElementById('gameScreen');
-const emailInput = document.getElementById('emailInput');
-const passwordInput = document.getElementById('passwordInput');
-const registerBtn = document.getElementById('registerBtn');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const authStatus = document.getElementById('authStatus');
-const statusText = document.getElementById('statusText');
-const createGameBtn = document.getElementById('createGameBtn');
-const joinGameBtn = document.getElementById('joinGameBtn');
-const gameIdInput = document.getElementById('gameIdInput');
-const joinGameSection = document.getElementById('joinGameSection');
-const gameLinkDisplay = document.getElementById('gameLinkDisplay');
-const gameLinkSection = document.getElementById('gameLinkSection');
-const canvas = document.getElementById('goBoard');
-const ctx = canvas.getContext('2d');
+/* ================================
+   DOM elements
+================================= */
+const authScreen = document.getElementById("authScreen");
+const lobbyScreen = document.getElementById("lobbyScreen");
+const gameScreen = document.getElementById("gameScreen");
 
-const boardSize = 19;
-const cellSize = canvas.width / (boardSize + 1);
+const emailInput = document.getElementById("emailInput");
+const passwordInput = document.getElementById("passwordInput");
+const registerBtn = document.getElementById("registerBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const authMessage = document.getElementById("authMessage");
 
-let board = [];
-for (let i = 0; i < boardSize; i++) {
-    board[i] = new Array(boardSize).fill(0);
-}
+const createGameBtn = document.getElementById("createGameBtn");
+const joinGameBtn = document.getElementById("joinGameBtn");
+const gameIdInput = document.getElementById("gameIdInput");
+const joinGameSection = document.getElementById("joinGameSection");
+const gameLinkDisplay = document.getElementById("gameLinkDisplay");
+const gameLinkSection = document.getElementById("gameLinkSection");
+const copyLinkBtn = document.getElementById("copyLinkBtn");
+const lobbyMessage = document.getElementById("lobbyMessage");
 
-let currentPlayer = 1; // 1 pour le noir, 2 pour le blanc
-let lastMove = null;
-let currentHover = null;
-let myPlayerColor = null;
+const canvas = document.getElementById("goBoard");
+const ctx = canvas.getContext("2d");
+const passButton = document.getElementById("passButton");
+const forfeitButton = document.getElementById("forfeitButton");
+const gameMessage = document.getElementById("gameMessage");
+
+const blackScoreEl = document.getElementById("blackScore");
+const whiteScoreEl = document.getElementById("whiteScore");
+
+/* ================================
+   Game constants
+================================= */
+const BOARD_SIZE = 19;
+const KOMI = 7.5;
+const CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
+
+let board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+let history = []; // for Superko rule
+let currentPlayer = 1; // 1 = black, 2 = white
+let myColor = null;
 let myUid = null;
 
-let blackStonesCount = 0;
-let whiteStonesCount = 0;
-let blackTerritory = 0;
-let whiteTerritory = 0;
-const KOMI = 7.5;
+let consecutivePasses = 0;
+let gameOver = false;
 
-const stoneBlack = new Image();
-stoneBlack.src = 'stone_black.png';
-const stoneWhite = new Image();
-stoneWhite.src = 'stone_white.png';
-const lastMoveMarker = new Image();
-lastMoveMarker.src = 'last_move_marker.png';
-const hoverMarker = new Image();
-hoverMarker.src = 'hover_marker.png';
-const impossibleMarker = new Image();
-impossibleMarker.src = 'impossible.png';
-
-let isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-let lastTouchTime = 0;
-
-// WebRTC variables
+/* ================================
+   WebRTC setup
+================================= */
 let peerConnection;
 let dataChannel;
 const iceServers = {
-    'iceServers': [
-        { 'urls': 'stun:stun.l.google.com:19302' },
-        { 'urls': 'stun:stun1.l.google.com:19302' }
-    ]
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" }
+  ]
 };
 
-// Fonctions de dessin et de règles de jeu
-const drawGrid = () => {
-    ctx.beginPath();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1.5;
+/* ================================
+   Helpers
+================================= */
+function showScreen(screen) {
+  [authScreen, lobbyScreen, gameScreen].forEach(s => s.classList.remove("active"));
+  screen.classList.add("active");
+}
 
-    for (let i = 1; i <= boardSize; i++) {
-        ctx.moveTo(i * cellSize, cellSize);
-        ctx.lineTo(i * cellSize, boardSize * cellSize);
-        ctx.moveTo(cellSize, i * cellSize);
-        ctx.lineTo(boardSize * cellSize, i * cellSize);
-    }
+function showMessage(el, text, color = "#bbb") {
+  el.innerText = text;
+  el.style.color = color;
+}
+
+/* ================================
+   Board utilities
+================================= */
+function drawGrid() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1.5;
+
+  for (let i = 1; i <= BOARD_SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * CELL_SIZE, CELL_SIZE);
+    ctx.lineTo(i * CELL_SIZE, BOARD_SIZE * CELL_SIZE);
     ctx.stroke();
 
-    const starPoints = [
-        [3, 3], [3, 9], [3, 15],
-        [9, 3], [9, 9], [9, 15],
-        [15, 3], [15, 9], [15, 15]
-    ];
-    starPoints.forEach(([x, y]) => {
-        ctx.beginPath();
-        ctx.arc((x + 1) * cellSize, (y + 1) * cellSize, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#000';
-        ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(CELL_SIZE, i * CELL_SIZE);
+    ctx.lineTo(BOARD_SIZE * CELL_SIZE, i * CELL_SIZE);
+    ctx.stroke();
+  }
+
+  // Star points
+  const star = [3, 9, 15];
+  star.forEach(x => {
+    star.forEach(y => {
+      ctx.beginPath();
+      ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
+      ctx.fill();
     });
-};
+  });
+}
 
-const drawBoard = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawGrid();
+function drawStones() {
+  for (let y = 0; y < BOARD_SIZE; y++) {
+    for (let x = 0; x < BOARD_SIZE; x++) {
+      if (board[y][x] === 1 || board[y][x] === 2) {
+        ctx.beginPath();
+        ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
+        ctx.fillStyle = board[y][x] === 1 ? "#000" : "#fff";
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+  }
+}
 
-    for (let y = 0; y < boardSize; y++) {
-        for (let x = 0; x < boardSize; x++) {
-            const stoneX = (x + 1) * cellSize;
-            const stoneY = (y + 1) * cellSize;
+function renderBoard() {
+  drawGrid();
+  drawStones();
+}
 
-            if (board[y][x] === 1) {
-                ctx.drawImage(stoneBlack, stoneX - cellSize / 2, stoneY - cellSize / 2, cellSize, cellSize);
-            } else if (board[y][x] === 2) {
-                ctx.drawImage(stoneWhite, stoneX - cellSize / 2, stoneY - cellSize / 2, cellSize, cellSize);
+/* ================================
+   Rules: chains, liberties, captures
+================================= */
+function getNeighbors(x, y) {
+  return [
+    [x - 1, y],
+    [x + 1, y],
+    [x, y - 1],
+    [x, y + 1]
+  ].filter(([nx, ny]) => nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE);
+}
+
+function getChain(x, y, color, visited, state) {
+  const chain = [];
+  const queue = [[x, y]];
+  visited.add(`${x},${y}`);
+  while (queue.length) {
+    const [cx, cy] = queue.pop();
+    chain.push([cx, cy]);
+    for (let [nx, ny] of getNeighbors(cx, cy)) {
+      if (!visited.has(`${nx},${ny}`) && state[ny][nx] === color) {
+        visited.add(`${nx},${ny}`);
+        queue.push([nx, ny]);
+      }
+    }
+  }
+  return chain;
+}
+
+function getLiberties(chain, state) {
+  const libs = new Set();
+  for (let [x, y] of chain) {
+    for (let [nx, ny] of getNeighbors(x, y)) {
+      if (state[ny][nx] === 0) libs.add(`${nx},${ny}`);
+    }
+  }
+  return libs.size;
+}
+
+function copyBoard(state) {
+  return state.map(r => [...r]);
+}
+
+function placeStone(x, y, color, state) {
+  const newState = copyBoard(state);
+  newState[y][x] = color;
+
+  // Capture opponent chains
+  const opponent = color === 1 ? 2 : 1;
+  for (let [nx, ny] of getNeighbors(x, y)) {
+    if (newState[ny][nx] === opponent) {
+      const chain = getChain(nx, ny, opponent, new Set(), newState);
+      if (getLiberties(chain, newState) === 0) {
+        chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
+      }
+    }
+  }
+
+  // Check suicide
+  const chain = getChain(x, y, color, new Set(), newState);
+  if (getLiberties(chain, newState) === 0) return null;
+
+  return newState;
+}
+
+function boardToString(state) {
+  return state.map(r => r.join("")).join("|");
+}
+
+function isLegalMove(x, y, color, state) {
+  if (state[y][x] !== 0) return false;
+  const newState = placeStone(x, y, color, state);
+  if (!newState) return false;
+
+  // Superko: check against history
+  const newStateStr = boardToString(newState);
+  if (history.includes(newStateStr)) return false;
+
+  return true;
+}
+
+/* ================================
+   Scoring
+================================= */
+function computeScore(state) {
+  let black = 0;
+  let white = 0;
+  const visited = new Set();
+
+  for (let y = 0; y < BOARD_SIZE; y++) {
+    for (let x = 0; x < BOARD_SIZE; x++) {
+      if (state[y][x] === 1) black++;
+      else if (state[y][x] === 2) white++;
+      else if (state[y][x] === 0 && !visited.has(`${x},${y}`)) {
+        const queue = [[x, y]];
+        const territory = [];
+        const borders = new Set();
+        visited.add(`${x},${y}`);
+        while (queue.length) {
+          const [cx, cy] = queue.pop();
+          territory.push([cx, cy]);
+          for (let [nx, ny] of getNeighbors(cx, cy)) {
+            if (state[ny][nx] === 0 && !visited.has(`${nx},${ny}`)) {
+              visited.add(`${nx},${ny}`);
+              queue.push([nx, ny]);
+            } else if (state[ny][nx] !== 0) {
+              borders.add(state[ny][nx]);
             }
+          }
         }
-    }
-
-    if (lastMove) {
-        const [x, y] = lastMove;
-        const markerX = (x + 1) * cellSize;
-        const markerY = (y + 1) * cellSize;
-        ctx.drawImage(lastMoveMarker, markerX - cellSize / 2, markerY - cellSize / 2, cellSize, cellSize);
-    }
-
-    if (currentHover) {
-        const [x, y] = currentHover;
-        const isIllegal = isMoveIllegal(x, y, currentPlayer);
-        const marker = isIllegal ? impossibleMarker : hoverMarker;
-        const markerX = (x + 1) * cellSize;
-        const markerY = (y + 1) * cellSize;
-        ctx.drawImage(marker, markerX - cellSize / 2, markerY - cellSize / 2, cellSize, cellSize);
-    }
-};
-
-const getNeighbors = (x, y) => {
-    const neighbors = [];
-    if (x > 0) neighbors.push([x - 1, y]);
-    if (x < boardSize - 1) neighbors.push([x + 1, y]);
-    if (y > 0) neighbors.push([x, y - 1]);
-    if (y < boardSize - 1) neighbors.push([x, y + 1]);
-    return neighbors;
-};
-
-const getChain = (x, y, color, visited, currentBoard) => {
-    const chain = [];
-    const queue = [[x, y]];
-    visited.add(`${x},${y}`);
-
-    while (queue.length > 0) {
-        const [currX, currY] = queue.shift();
-        chain.push([currX, currY]);
-
-        for (const [nextX, nextY] of getNeighbors(currX, currY)) {
-            if (!visited.has(`${nextX},${nextY}`) && currentBoard[nextY][nextX] === color) {
-                visited.add(`${nextX},${nextY}`);
-                queue.push([nextX, nextY]);
-            }
+        if (borders.size === 1) {
+          const owner = [...borders][0];
+          if (owner === 1) black += territory.length;
+          if (owner === 2) white += territory.length;
         }
+      }
     }
-    return chain;
+  }
+
+  white += KOMI;
+  return { black, white };
+}
+
+/* ================================
+   Game logic
+================================= */
+function playMove(x, y) {
+  if (gameOver) return;
+  if (myColor !== currentPlayer) {
+    showMessage(gameMessage, "Not your turn!", "orange");
+    return;
+  }
+  if (!isLegalMove(x, y, currentPlayer, board)) return;
+
+  board = placeStone(x, y, currentPlayer, board);
+  history.push(boardToString(board));
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+  consecutivePasses = 0;
+  renderBoard();
+  updateScore();
+
+  broadcast({ type: "move", board, currentPlayer, history });
+}
+
+function updateScore() {
+  const { black, white } = computeScore(board);
+  blackScoreEl.textContent = `Black: ${black}`;
+  whiteScoreEl.textContent = `White: ${white.toFixed(1)}`;
+}
+
+function passTurn() {
+  if (gameOver) return;
+  if (myColor !== currentPlayer) return;
+  consecutivePasses++;
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+
+  if (consecutivePasses >= 2) endGame();
+  else broadcast({ type: "pass", currentPlayer });
+}
+
+function resign() {
+  if (gameOver) return;
+  endGame(myColor === 1 ? "White wins by resignation" : "Black wins by resignation");
+}
+
+function endGame(message) {
+  gameOver = true;
+  const { black, white } = computeScore(board);
+  let result = message || (black > white ? "Black wins!" : "White wins!");
+  showMessage(gameMessage, result, "lightgreen");
+  broadcast({ type: "end", message: result });
+}
+
+/* ================================
+   WebRTC functions
+================================= */
+function broadcast(msg) {
+  if (dataChannel && dataChannel.readyState === "open") {
+    dataChannel.send(JSON.stringify(msg));
+  }
+}
+
+function setupDataChannel(channel) {
+  dataChannel = channel;
+  dataChannel.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "move") {
+      board = msg.board;
+      currentPlayer = msg.currentPlayer;
+      history = msg.history;
+      renderBoard();
+      updateScore();
+    } else if (msg.type === "pass") {
+      currentPlayer = msg.currentPlayer;
+      consecutivePasses++;
+      if (consecutivePasses >= 2) endGame();
+    } else if (msg.type === "end") {
+      endGame(msg.message);
+    }
+  };
+}
+
+/* ================================
+   Firebase signaling
+================================= */
+async function startSignaling(gameId, isCreator) {
+  peerConnection = new RTCPeerConnection(iceServers);
+
+  if (isCreator) {
+    dataChannel = peerConnection.createDataChannel("game");
+    setupDataChannel(dataChannel);
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    await db.ref("games/" + gameId).update({ offer: offer });
+  } else {
+    peerConnection.ondatachannel = e => setupDataChannel(e.channel);
+  }
+
+  peerConnection.onicecandidate = e => {
+    if (e.candidate) {
+      const path = isCreator ? "creatorCandidates" : "joinerCandidates";
+      db.ref(`games/${gameId}/${path}`).push(e.candidate);
+    }
+  };
+
+  if (!isCreator) {
+    const snap = await db.ref("games/" + gameId).once("value");
+    const data = snap.val();
+    if (data && data.offer) {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      await db.ref("games/" + gameId).update({ answer: answer });
+    }
+    db.ref("games/" + gameId + "/creatorCandidates").on("child_added", s => {
+      peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
+    });
+  } else {
+    db.ref("games/" + gameId + "/joinerCandidates").on("child_added", s => {
+      peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
+    });
+    db.ref("games/" + gameId + "/answer").on("value", async s => {
+      const answer = s.val();
+      if (answer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+  }
+}
+
+/* ================================
+   Auth events
+================================= */
+registerBtn.onclick = () => {
+  auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value)
+    .then(() => showMessage(authMessage, "Account created", "lightgreen"))
+    .catch(err => showMessage(authMessage, err.message, "red"));
 };
 
-const getLiberties = (chain, currentBoard) => {
-    const liberties = new Set();
-    for (const [x, y] of chain) {
-        for (const [neighborX, neighborY] of getNeighbors(x, y)) {
-            if (currentBoard[neighborY][neighborX] === 0) {
-                liberties.add(`${neighborX},${neighborY}`);
-            }
-        }
-    }
-    return liberties.size;
+loginBtn.onclick = () => {
+  auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value)
+    .then(() => showMessage(authMessage, "Logged in", "lightgreen"))
+    .catch(err => showMessage(authMessage, err.message, "red"));
 };
 
-const isMoveIllegal = (x, y, color) => {
-    if (x < 0 || x >= boardSize || y < 0 || y >= boardSize) return true;
-    if (board[y][x] !== 0) return true;
+logoutBtn.onclick = () => auth.signOut();
 
-    let tempBoard = JSON.parse(JSON.stringify(board));
-    tempBoard[y][x] = color;
-    
-    const opponentColor = color === 1 ? 2 : 1;
-    let capturedStones = 0;
-    const visited = new Set();
-    for (const [nx, ny] of getNeighbors(x, y)) {
-        if (tempBoard[ny][nx] === opponentColor && !visited.has(`${nx},${ny}`)) {
-            const chain = getChain(nx, ny, opponentColor, visited, tempBoard);
-            if (getLiberties(chain, tempBoard) === 0) {
-                capturedStones += chain.length;
-            }
-        }
-    }
-    
-    const newChain = getChain(x, y, color, new Set(), tempBoard);
-    if (getLiberties(newChain, tempBoard) === 0 && capturedStones === 0) {
-        return true;
-    }
-    
-    return false;
-};
-
-const captureStones = (lastX, lastY) => {
-    const opponentColor = currentPlayer === 1 ? 2 : 1;
-    const visited = new Set();
-    let captured = 0;
-    
-    for (const [x, y] of getNeighbors(lastX, lastY)) {
-        if (board[y][x] === opponentColor && !visited.has(`${x},${y}`)) {
-            const chain = getChain(x, y, opponentColor, visited, board);
-            if (getLiberties(chain, board) === 0) {
-                for (const [stoneX, stoneY] of chain) {
-                    board[stoneY][stoneX] = 0;
-                    captured++;
-                }
-            }
-        }
-    }
-    return captured;
-};
-
-const findTerritory = (x, y, visited) => {
-    const territory = new Set();
-    const queue = [[x, y]];
-    visited.add(`${x},${y}`);
-    let owner = 0; 
-    let borders = new Set();
-
-    while (queue.length > 0) {
-        const [currX, currY] = queue.shift();
-        territory.add(`${currX},${currY}`);
-
-        for (const [nextX, nextY] of getNeighbors(currX, currY)) {
-            if (board[nextY][nextX] === 0 && !visited.has(`${nextX},${nextY}`)) {
-                visited.add(`${nextX},${nextY}`);
-                queue.push([nextX, nextY]);
-            } else if (board[nextY][nextX] !== 0) {
-                borders.add(board[nextY][nextX]);
-            }
-        }
-    }
-    
-    if (borders.size === 1) {
-        owner = Array.from(borders)[0];
-    }
-    
-    return { size: territory.size, owner };
-};
-
-const updateScore = () => {
-    blackStonesCount = 0;
-    whiteStonesCount = 0;
-    blackTerritory = 0;
-    whiteTerritory = 0;
-    
-    const visited = new Set();
-
-    for (let y = 0; y < boardSize; y++) {
-        for (let x = 0; x < boardSize; x++) {
-            const stone = board[y][x];
-            if (stone === 1) {
-                blackStonesCount++;
-            } else if (stone === 2) {
-                whiteStonesCount++;
-            } else if (stone === 0 && !visited.has(`${x},${y}`)) {
-                const { size, owner } = findTerritory(x, y, visited);
-                if (owner === 1) {
-                    blackTerritory += size;
-                } else if (owner === 2) {
-                    whiteTerritory += size;
-                }
-            }
-        }
-    }
-
-    const blackScore = blackStonesCount + blackTerritory;
-    const whiteScore = whiteStonesCount + whiteTerritory + KOMI;
-
-    document.getElementById('blackScore').innerText = `Noir : ${blackScore}`;
-    document.getElementById('whiteScore').innerText = `Blanc : ${whiteScore}`;
-};
-
-// Fonctions de jeu et de logique de coup
-const placeStone = (event) => {
-    if (currentPlayer !== myPlayerColor) {
-        alert("Ce n'est pas votre tour !");
-        return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    const clientX = event.clientX || event.touches[0].clientX;
-    const clientY = event.clientY || event.touches[0].clientY;
-
-    const mouseX = clientX - rect.left;
-    const mouseY = clientY - rect.top;
-
-    const gridX = Math.round(mouseX / cellSize) - 1;
-    const gridY = Math.round(mouseY / cellSize) - 1;
-
-    if (isMoveIllegal(gridX, gridY, currentPlayer)) {
-        return;
-    }
-
-    board[gridY][gridX] = currentPlayer;
-    captureStones(gridX, gridY);
-    
-    lastMove = [gridX, gridY];
-    
-    dataChannel.send(JSON.stringify({ type: 'move', board: board, lastMove: lastMove }));
-    
-    currentPlayer = currentPlayer === 1 ? 2 : 1;
-    drawBoard();
-    updateScore();
-    if (isTouchDevice) currentHover = null;
-};
-
-const handlePointerMove = (event) => {
-    if (isTouchDevice) return;
-    if (currentPlayer !== myPlayerColor) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-
-    const gridX = Math.round(mouseX / cellSize) - 1;
-    const gridY = Math.round(mouseY / cellSize) - 1;
-
-    if (gridX >= 0 && gridX < boardSize && gridY >= 0 && gridY < boardSize) {
-        currentHover = [gridX, gridY];
-    } else {
-        currentHover = null;
-    }
-    drawBoard();
-};
-
-const handlePointerDown = (event) => {
-    if (isTouchDevice) {
-        const currentTime = new Date().getTime();
-        const tapLength = currentTime - lastTouchTime;
-        const rect = canvas.getBoundingClientRect();
-        const touchX = event.touches[0].clientX - rect.left;
-        const touchY = event.touches[0].clientY - rect.top;
-        const gridX = Math.round(touchX / cellSize) - 1;
-        const gridY = Math.round(touchY / cellSize) - 1;
-
-        if (tapLength < 500 && tapLength > 0 && currentHover && currentHover[0] === gridX && currentHover[1] === gridY) {
-            placeStone(event);
-            lastTouchTime = 0;
-            currentHover = null;
-        } else {
-            lastTouchTime = currentTime;
-            if (gridX >= 0 && gridX < boardSize && gridY >= 0 && gridY < boardSize) {
-                currentHover = [gridX, gridY];
-                drawBoard();
-            }
-        }
-    } else {
-        placeStone(event);
-    }
-};
-
-// Fonctions de connexion P2P
-const createPeerConnection = async (isCreator) => {
-    peerConnection = new RTCPeerConnection(iceServers);
-
-    if (isCreator) {
-        dataChannel = peerConnection.createDataChannel('game-channel');
-        setupDataChannelEvents();
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        return offer;
-    } else {
-        peerConnection.ondatachannel = (event) => {
-            dataChannel = event.channel;
-            setupDataChannelEvents();
-        };
-        return null;
-    }
-};
-
-const setupDataChannelEvents = () => {
-    dataChannel.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'move') {
-            board = message.board;
-            lastMove = message.lastMove;
-            currentPlayer = currentPlayer === 1 ? 2 : 1;
-            drawBoard();
-            updateScore();
-        }
-    };
-    dataChannel.onopen = () => {
-        alert("Connexion établie ! La partie peut commencer.");
-        welcomeScreen.classList.remove('active');
-        gameScreen.classList.add('active');
-    };
-};
-
-const startSignaling = async (gameId) => {
-    const gameRef = database.ref('games/' + gameId);
-    
-    // Joueur 1 (créateur)
-    if (myPlayerColor === 1) {
-        const offer = await createPeerConnection(true);
-        gameRef.set({ offer: offer });
-        
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                gameRef.child('creatorCandidates').push(event.candidate);
-            }
-        };
-
-        gameRef.child('joinerCandidates').on('child_added', (snapshot) => {
-            peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
-        });
-        
-        gameRef.child('answer').on('value', async (snapshot) => {
-            const answer = snapshot.val();
-            if (answer) {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                welcomeScreen.classList.remove('active');
-                gameScreen.classList.add('active');
-            }
-        });
-    } 
-    // Joueur 2 (joiner)
-    else {
-        gameRef.once('value', async (snapshot) => {
-            const data = snapshot.val();
-            if (data.offer) {
-                await createPeerConnection(false);
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                gameRef.update({ answer: answer });
-            }
-        });
-
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                gameRef.child('joinerCandidates').push(event.candidate);
-            }
-        };
-
-        gameRef.child('creatorCandidates').on('child_added', (snapshot) => {
-            peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
-        });
-    }
-};
-
-// Fonctions d'authentification
-const updateUI = (user) => {
-    // Si un utilisateur est connecté
-    if (user) {
-        authStatus.style.display = 'flex';
-        statusText.innerText = `Connecté : ${user.email}`;
-        logoutBtn.style.display = 'block';
-
-        // Gérer les cas de lien de partie vs page d'accueil
-        const urlParams = new URLSearchParams(window.location.search);
-        const gameIdFromUrl = urlParams.get('gameId');
-        if (gameIdFromUrl) {
-            authScreen.classList.remove('active');
-            welcomeScreen.classList.add('active');
-            joinGameSection.style.display = 'flex';
-            createGameBtn.style.display = 'none';
-            gameIdInput.value = gameIdFromUrl;
-        } else {
-            authScreen.classList.remove('active');
-            welcomeScreen.classList.add('active');
-        }
-    } else {
-        // Si l'utilisateur n'est pas connecté
-        authScreen.classList.add('active');
-        welcomeScreen.classList.remove('active');
-        gameScreen.classList.remove('active');
-        authStatus.style.display = 'none';
-        logoutBtn.style.display = 'none';
-    }
-};
-
-registerBtn.addEventListener('click', () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    auth.createUserWithEmailAndPassword(email, password)
-        .then(() => {
-            alert("Compte créé avec succès !");
-        })
-        .catch(error => {
-            alert(error.message);
-        });
+/* ================================
+   Auth state change
+================================= */
+auth.onAuthStateChanged(user => {
+  if (user) {
+    myUid = user.uid;
+    showScreen(lobbyScreen);
+  } else {
+    showScreen(authScreen);
+  }
 });
 
-loginBtn.addEventListener('click', () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-            alert("Connexion réussie !");
-        })
-        .catch(error => {
-            alert(error.message);
-        });
-});
-
-logoutBtn.addEventListener('click', () => {
-    auth.signOut();
-});
-
-// Écouteur d'état de l'authentification (C'est le point d'entrée unique de la logique d'affichage)
-auth.onAuthStateChanged(updateUI);
-
-// Logique pour les boutons de jeu
-createGameBtn.addEventListener('click', () => {
-    if (!auth.currentUser) {
-        alert("Vous devez être connecté pour créer une partie.");
-        return;
-    }
-    const gameId = Math.random().toString(36).substring(2, 9);
-    myPlayerColor = 1;
-    startSignaling(gameId);
-    
-    gameLinkSection.style.display = 'block';
-    gameLinkDisplay.innerText = window.location.href.split('?')[0] + '?gameId=' + gameId;
-    createGameBtn.style.display = 'none';
-    joinGameSection.style.display = 'none';
-});
-
-joinGameBtn.addEventListener('click', () => {
-    if (!auth.currentUser) {
-        alert("Vous devez être connecté pour rejoindre une partie.");
-        return;
-    }
-    const gameId = gameIdInput.value;
-    myPlayerColor = 2;
-    startSignaling(gameId);
-});
-
-canvas.addEventListener('mousemove', handlePointerMove);
-canvas.addEventListener('mousedown', handlePointerDown);
-canvas.addEventListener('touchstart', handlePointerDown);
-
-stoneBlack.onload = () => {
-    stoneWhite.onload = () => {
-        lastMoveMarker.onload = () => {
-            hoverMarker.onload = () => {
-                impossibleMarker.onload = () => {
-                    drawBoard();
-                    updateScore();
-                };
-            };
-        };
-    };
+/* ================================
+   Lobby
+================================= */
+createGameBtn.onclick = () => {
+  const gameId = Math.random().toString(36).substring(2, 9);
+  myColor = 1;
+  startSignaling(gameId, true);
+  showMessage(lobbyMessage, "Game created. Waiting for opponent...", "lightgreen");
+  gameLinkSection.style.display = "block";
+  gameLinkDisplay.textContent = window.location.origin + window.location.pathname + "?gameId=" + gameId;
 };
+
+joinGameBtn.onclick = () => {
+  const gameId = gameIdInput.value.trim();
+  if (!gameId) return;
+  myColor = 2;
+  startSignaling(gameId, false);
+  showMessage(lobbyMessage, "Joining game...", "lightgreen");
+};
+
+copyLinkBtn.onclick = () => {
+  navigator.clipboard.writeText(gameLinkDisplay.textContent);
+  showMessage(lobbyMessage, "Link copied!", "lightgreen");
+};
+
+/* ================================
+   Game events
+================================= */
+canvas.addEventListener("click", e => {
+  if (gameOver) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.round((e.clientX - rect.left) / CELL_SIZE) - 1;
+  const y = Math.round((e.clientY - rect.top) / CELL_SIZE) - 1;
+  if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+    playMove(x, y);
+  }
+});
+
+passButton.onclick = passTurn;
+forfeitButton.onclick = resign;
+
+/* ================================
+   Init
+================================= */
+renderBoard();
+updateScore();

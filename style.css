@@ -1,103 +1,132 @@
+/* General layout */
 body {
-    background-color: #000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    margin: 0;
-    font-family: sans-serif;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: #111;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.game-container {
-    text-align: center;
+/* Screen system */
+.screen {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  background-color: #111;
 }
 
-#goBoard {
-    background-image: url('plateau.png');
-    background-size: 100% 100%;
-    border: 5px solid #664e3f;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+.screen.active {
+  display: flex;
 }
 
-.controls {
-    margin-top: 20px;
+/* Titles */
+h1 {
+  margin-bottom: 20px;
+  font-size: 2rem;
+  color: #f1f1f1;
 }
 
+/* Input fields */
+input {
+  padding: 10px;
+  margin: 8px 0;
+  border: 1px solid #333;
+  border-radius: 5px;
+  background: #222;
+  color: white;
+  width: 250px;
+  font-size: 1rem;
+}
+
+input:focus {
+  outline: none;
+  border-color: #666;
+}
+
+/* Buttons */
 button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    margin: 0 10px;
-    padding: 0;
+  background-color: #333;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 10px 20px;
+  margin: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s ease-in-out, transform 0.1s ease-in-out;
 }
 
-button img {
-    width: 150px;
-    height: auto;
-    transition: transform 0.2s ease-in-out;
+button:hover {
+  background-color: #444;
 }
 
-#passButton img {
-    content: url('pass_no_glow.png');
+button:active {
+  transform: scale(0.95);
 }
 
-#passButton:hover img {
-    content: url('pass_glow.png');
+/* Messages */
+.message {
+  margin-top: 15px;
+  font-size: 0.9rem;
+  color: #bbb;
+  min-height: 1.2em;
 }
 
-#forfeitButton img {
-    content: url('lose_no_glow.png');
-}
-
-#forfeitButton:hover img {
-    content: url('lose_glow.png');
-}
+/* Scoreboard */
 .score-container {
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    width: 100%;
-    margin-bottom: 20px;
-    color: white;
-    font-size: 24px;
-    font-weight: bold;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .player-score {
-    padding: 10px 20px;
-    background-color: rgba(0, 0, 0, 0.5);
-    border-radius: 10px;
-    min-width: 150px;
-    text-align: center;
+  padding: 10px 20px;
+  background-color: rgba(30, 30, 30, 0.8);
+  border-radius: 10px;
+  font-size: 1.2rem;
+  min-width: 150px;
+  text-align: center;
 }
 
-/* Nouveau : masquer tous les écrans au démarrage */
-.screen {
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    width: 100vw;
-    position: absolute;
-    top: 0;
-    left: 0;
-    background-color: #000;
-    color: white;
+/* Game board */
+#goBoard {
+  background-image: url("board_texture.png");
+  background-size: cover;
+  border: 5px solid #664e3f;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+  margin-bottom: 20px;
 }
 
-/* Nouveau : afficher un seul écran à la fois via JavaScript */
-.screen.active {
-    display: flex;
+/* Controls */
+.controls {
+  margin-top: 10px;
 }
 
-#welcomeScreen h1 {
-    margin-bottom: 20px;
-}
-
-input {
-    padding: 10px;
-    margin: 5px;
-    border-radius: 5px;
-    border: none;
+/* Responsive */
+@media (max-width: 700px) {
+  #goBoard {
+    width: 90vw;
+    height: 90vw;
+  }
+  input {
+    width: 80%;
+  }
+  .player-score {
+    min-width: auto;
+    font-size: 1rem;
+  }
 }

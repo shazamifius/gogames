@@ -1,58 +1,66 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jeu de Go</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Online Go Game</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
 </head>
 <body>
+  <!-- Authentication screen -->
+  <div id="authScreen" class="screen active">
+    <h1>Online Go Game</h1>
+    <div class="auth-box">
+      <input type="email" id="emailInput" placeholder="Email">
+      <input type="password" id="passwordInput" placeholder="Password">
+      <button id="registerBtn">Register</button>
+      <button id="loginBtn">Login</button>
+      <button id="logoutBtn" style="display:none;">Logout</button>
+    </div>
+    <p id="authMessage" class="message"></p>
+  </div>
 
-    <div id="authScreen" class="screen">
-        <div id="authStatus" style="display:none; align-items:center; position:absolute; top:20px; left:20px; color:white; font-size:1.2em;">
-            <img id="profileIcon" src="profile_icon.png" alt="Icône de profil" style="width:30px; height:30px; margin-right:10px;">
-            <span id="statusText">Déconnecté</span>
-        </div>
-        <h1>Jeu de Go</h1>
-        <input type="email" id="emailInput" placeholder="Email">
-        <input type="password" id="passwordInput" placeholder="Mot de passe">
-        <button id="registerBtn">S'enregistrer</button>
-        <button id="loginBtn">Se connecter</button>
-        <button id="logoutBtn" style="display:none;">Déconnexion</button>
+  <!-- Lobby / welcome screen -->
+  <div id="lobbyScreen" class="screen">
+    <h1>Welcome to Go</h1>
+    <button id="createGameBtn">Create Game</button>
+
+    <div id="joinGameSection" style="display:none;">
+      <input type="text" id="gameIdInput" placeholder="Enter game code">
+      <button id="joinGameBtn">Join Game</button>
     </div>
 
-    <div id="welcomeScreen" class="screen">
-        <h1>Jeu de Go</h1>
-        <button id="createGameBtn">Créer une partie</button>
-        <div id="joinGameSection" style="display: none;">
-            <input type="text" id="gameIdInput" placeholder="Entrer le code de la partie">
-            <button id="joinGameBtn">Rejoindre</button>
-        </div>
-        <div id="gameLinkSection" style="display: none;">
-            <p>Partage ce lien avec ton ami :</p>
-            <p id="gameLinkDisplay"></p>
-        </div>
+    <div id="gameLinkSection" style="display:none;">
+      <p>Share this link with your friend:</p>
+      <p id="gameLinkDisplay"></p>
+      <button id="copyLinkBtn">Copy Link</button>
     </div>
 
-    <div id="gameScreen" class="screen">
-        <div class="score-container">
-            <div id="blackScore" class="player-score">Noir : 0</div>
-            <div id="whiteScore" class="player-score">Blanc : 7.5</div>
-        </div>
-        <canvas id="goBoard" width="600" height="600"></canvas>
-        <div class="controls">
-            <button id="passButton">
-                <img src="pass_no_glow.png" alt="Passer le tour">
-            </button>
-            <button id="forfeitButton">
-                <img src="lose_no_glow.png" alt="Abandonner">
-            </button>
-        </div>
+    <p id="lobbyMessage" class="message"></p>
+  </div>
+
+  <!-- Game screen -->
+  <div id="gameScreen" class="screen">
+    <div class="score-container">
+      <div id="blackScore" class="player-score">Black: 0</div>
+      <div id="whiteScore" class="player-score">White: 7.5</div>
     </div>
 
-    <script src="script.js"></script>
+    <canvas id="goBoard" width="600" height="600"></canvas>
+
+    <div class="controls">
+      <button id="passButton">Pass</button>
+      <button id="forfeitButton">Resign</button>
+    </div>
+
+    <p id="gameMessage" class="message"></p>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
