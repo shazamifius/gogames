@@ -398,8 +398,8 @@ const setupDataChannelEvents = () => {
     };
     dataChannel.onopen = () => {
         alert("Connexion établie ! La partie peut commencer.");
-        welcomeScreen.style.display = 'none';
-        gameScreen.style.display = 'flex';
+        welcomeScreen.classList.remove('active');
+        gameScreen.classList.add('active');
     };
 };
 
@@ -425,8 +425,8 @@ const startSignaling = async (gameId) => {
             const answer = snapshot.val();
             if (answer) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                welcomeScreen.style.display = 'none';
-                gameScreen.style.display = 'flex';
+                welcomeScreen.classList.remove('active');
+                gameScreen.classList.add('active');
             }
         });
     } 
@@ -458,17 +458,32 @@ const startSignaling = async (gameId) => {
 
 // Fonctions d'authentification
 const updateUI = (user) => {
+    // Si un utilisateur est connecté
     if (user) {
-        authScreen.style.display = 'none';
-        welcomeScreen.style.display = 'flex';
-        logoutBtn.style.display = 'block';
         authStatus.style.display = 'flex';
         statusText.innerText = `Connecté : ${user.email}`;
+        logoutBtn.style.display = 'block';
+
+        // Gérer les cas de lien de partie vs page d'accueil
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameIdFromUrl = urlParams.get('gameId');
+        if (gameIdFromUrl) {
+            authScreen.classList.remove('active');
+            welcomeScreen.classList.add('active');
+            joinGameSection.style.display = 'flex';
+            createGameBtn.style.display = 'none';
+            gameIdInput.value = gameIdFromUrl;
+        } else {
+            authScreen.classList.remove('active');
+            welcomeScreen.classList.add('active');
+        }
     } else {
-        authScreen.style.display = 'flex';
-        welcomeScreen.style.display = 'none';
-        logoutBtn.style.display = 'none';
+        // Si l'utilisateur n'est pas connecté
+        authScreen.classList.add('active');
+        welcomeScreen.classList.remove('active');
+        gameScreen.classList.remove('active');
         authStatus.style.display = 'none';
+        logoutBtn.style.display = 'none';
     }
 };
 
@@ -476,9 +491,8 @@ registerBtn.addEventListener('click', () => {
     const email = emailInput.value;
     const password = passwordInput.value;
     auth.createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
+        .then(() => {
             alert("Compte créé avec succès !");
-            // L'écouteur onAuthStateChanged s'occupe de l'affichage
         })
         .catch(error => {
             alert(error.message);
@@ -489,9 +503,8 @@ loginBtn.addEventListener('click', () => {
     const email = emailInput.value;
     const password = passwordInput.value;
     auth.signInWithEmailAndPassword(email, password)
-        .then((userCredential) => {
+        .then(() => {
             alert("Connexion réussie !");
-            // L'écouteur onAuthStateChanged s'occupe de l'affichage
         })
         .catch(error => {
             alert(error.message);
@@ -502,27 +515,8 @@ logoutBtn.addEventListener('click', () => {
     auth.signOut();
 });
 
-// NOUVELLE LOGIQUE DE DÉMARRAGE : Gérer l'état de la page après que Firebase a chargé l'état de l'utilisateur
-auth.onAuthStateChanged(user => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const gameIdFromUrl = urlParams.get('gameId');
-
-    // On vérifie le lien en premier pour éviter le flash
-    if (gameIdFromUrl) {
-        authScreen.style.display = 'none';
-        welcomeScreen.style.display = 'flex';
-        joinGameSection.style.display = 'flex';
-        createGameBtn.style.display = 'none';
-        gameIdInput.value = gameIdFromUrl;
-        // Si l'utilisateur est aussi connecté, on affiche son email
-        if (user) {
-            updateUI(user);
-        }
-    } else {
-        // Si pas de lien de partie, on utilise la fonction updateUI pour afficher l'écran correct
-        updateUI(user);
-    }
-});
+// Écouteur d'état de l'authentification (C'est le point d'entrée unique de la logique d'affichage)
+auth.onAuthStateChanged(updateUI);
 
 // Logique pour les boutons de jeu
 createGameBtn.addEventListener('click', () => {

@@ -70,8 +70,10 @@ button img {
     min-width: 150px;
     text-align: center;
 }
+
+/* Nouveau : masquer tous les écrans au démarrage */
 .screen {
-    display: flex;
+    display: none;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -83,32 +85,19 @@ button img {
     background-color: #000;
     color: white;
 }
-.screen h1 {
-    font-size: 3em;
-    margin-bottom: 50px;
-    color: white; /* Corrigé ici */
+
+/* Nouveau : afficher un seul écran à la fois via JavaScript */
+.screen.active {
+    display: flex;
 }
 
-.screen button, .screen input {
-    font-size: 1.5em;
-    padding: 10px 20px;
-    margin: 10px;
-    border: none;
+#welcomeScreen h1 {
+    margin-bottom: 20px;
+}
+
+input {
+    padding: 10px;
+    margin: 5px;
     border-radius: 5px;
-    cursor: pointer;
-    color: white; /* Corrigé ici */
-}
-
-.screen input {
-    background-color: #333;
-    color: white;
-}
-
-.screen input::placeholder {
-    color: #bbb;
-}
-
-#gameLinkSection {
-    margin-top: 20px;
-    text-align: center;
+    border: none;
 }
