@@ -7,10 +7,24 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
 </head>
 <body>
 
-    <div id="welcomeScreen" class="screen">
+    <div id="authScreen" class="screen">
+        <div id="authStatus" style="display:none; align-items:center; position:absolute; top:20px; left:20px; color:white; font-size:1.2em;">
+            <img id="profileIcon" src="profile_icon.png" alt="Icône de profil" style="width:30px; height:30px; margin-right:10px;">
+            <span id="statusText">Déconnecté</span>
+        </div>
+        <h1>Jeu de Go</h1>
+        <input type="email" id="emailInput" placeholder="Email">
+        <input type="password" id="passwordInput" placeholder="Mot de passe">
+        <button id="registerBtn">S'enregistrer</button>
+        <button id="loginBtn">Se connecter</button>
+        <button id="logoutBtn" style="display:none;">Déconnexion</button>
+    </div>
+
+    <div id="welcomeScreen" class="screen" style="display: none;">
         <h1>Jeu de Go</h1>
         <button id="createGameBtn">Créer une partie</button>
         <div id="joinGameSection" style="display: none;">

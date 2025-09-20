@@ -1,5 +1,5 @@
 body {
-    background-color: #000; /* Passé en noir */
+    background-color: #000;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -46,7 +46,6 @@ button img {
 }
 
 #forfeitButton img {
-    /* Ajout de la référence à l'image par défaut */
     content: url('lose_no_glow.png');
 }
 
@@ -84,40 +83,32 @@ button img {
     background-color: #000;
     color: white;
 }
-
-#welcomeScreen h1 {
+.screen h1 {
     font-size: 3em;
     margin-bottom: 50px;
+    color: white; /* Corrigé ici */
 }
 
-#welcomeScreen button, #joinGameSection input {
+.screen button, .screen input {
     font-size: 1.5em;
     padding: 10px 20px;
     margin: 10px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
+    color: white; /* Corrigé ici */
 }
 
-#joinGameSection input {
+.screen input {
     background-color: #333;
     color: white;
 }
 
-#joinGameSection input::placeholder {
+.screen input::placeholder {
     color: #bbb;
 }
 
 #gameLinkSection {
     margin-top: 20px;
     text-align: center;
-}
-#welcomeScreen h1,
-#welcomeScreen button {
-    color: white;
-}
-
-#joinGameSection input,
-#joinGameSection button {
-    color: white;
 }

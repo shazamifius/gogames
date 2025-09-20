@@ -13,17 +13,27 @@ const firebaseConfig = {
 // Initialise Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
+const auth = firebase.auth();
 
-const canvas = document.getElementById('goBoard');
-const ctx = canvas.getContext('2d');
-const gameScreen = document.getElementById('gameScreen');
+// Éléments du DOM
+const authScreen = document.getElementById('authScreen');
 const welcomeScreen = document.getElementById('welcomeScreen');
+const gameScreen = document.getElementById('gameScreen');
+const emailInput = document.getElementById('emailInput');
+const passwordInput = document.getElementById('passwordInput');
+const registerBtn = document.getElementById('registerBtn');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const authStatus = document.getElementById('authStatus');
+const statusText = document.getElementById('statusText');
 const createGameBtn = document.getElementById('createGameBtn');
 const joinGameBtn = document.getElementById('joinGameBtn');
 const gameIdInput = document.getElementById('gameIdInput');
 const joinGameSection = document.getElementById('joinGameSection');
 const gameLinkDisplay = document.getElementById('gameLinkDisplay');
 const gameLinkSection = document.getElementById('gameLinkSection');
+const canvas = document.getElementById('goBoard');
+const ctx = canvas.getContext('2d');
 
 const boardSize = 19;
 const cellSize = canvas.width / (boardSize + 1);
@@ -369,6 +379,9 @@ const createPeerConnection = async (isCreator) => {
         peerConnection.ondatachannel = (event) => {
             dataChannel = event.channel;
             setupDataChannelEvents();
+            // L'écran bascule pour celui qui rejoint la partie
+            welcomeScreen.style.display = 'none';
+            gameScreen.style.display = 'flex';
         };
         return null;
     }
@@ -387,16 +400,18 @@ const setupDataChannelEvents = () => {
     };
     dataChannel.onopen = () => {
         alert("Connexion établie ! La partie peut commencer.");
-        welcomeScreen.style.display = 'none';
-        gameScreen.style.display = 'flex';
+        // Pour s'assurer que l'hôte bascule aussi
+        if (myPlayerColor === 1) {
+            welcomeScreen.style.display = 'none';
+            gameScreen.style.display = 'flex';
+        }
     };
 };
 
 const startSignaling = async (gameId) => {
     const gameRef = database.ref('games/' + gameId);
     
-    // Joueur 1 (créateur)
-    if (myPlayerColor === 1) {
+    if (myPlayerColor === 1) { // Créateur de partie
         const offer = await createPeerConnection(true);
         gameRef.set({ offer: offer });
         
@@ -414,15 +429,9 @@ const startSignaling = async (gameId) => {
             const answer = snapshot.val();
             if (answer) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                // On s'assure que l'écran de jeu s'affiche pour l'hôte
-                welcomeScreen.style.display = 'none';
-                gameScreen.style.display = 'flex';
-                alert("Connexion établie ! La partie peut commencer.");
             }
         });
-    } 
-    // Joueur 2 (joiner)
-    else {
+    } else { // Joueur qui rejoint
         gameRef.once('value', async (snapshot) => {
             const data = snapshot.val();
             if (data.offer) {
@@ -447,13 +456,58 @@ const startSignaling = async (gameId) => {
     }
 };
 
+// Logique pour l'écran de connexion
+registerBtn.addEventListener('click', () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    auth.createUserWithEmailAndPassword(email, password)
+        .then(() => {
+            alert("Compte créé avec succès !");
+        })
+        .catch(error => {
+            alert(error.message);
+        });
+});
+
+loginBtn.addEventListener('click', () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+            // Géré par l'écouteur d'état de connexion
+        })
+        .catch(error => {
+            alert(error.message);
+        });
+});
+
+logoutBtn.addEventListener('click', () => {
+    auth.signOut();
+});
+
+auth.onAuthStateChanged(user => {
+    if (user) {
+        authScreen.style.display = 'none';
+        welcomeScreen.style.display = 'flex';
+        logoutBtn.style.display = 'block';
+        authStatus.style.display = 'flex';
+        statusText.innerText = "Connecté";
+        alert(`Bienvenue, ${user.email} !`);
+    } else {
+        authScreen.style.display = 'flex';
+        welcomeScreen.style.display = 'none';
+        logoutBtn.style.display = 'none';
+        authStatus.style.display = 'none';
+    }
+});
+
+// Logique pour les boutons de jeu
 createGameBtn.addEventListener('click', () => {
     const gameId = Math.random().toString(36).substring(2, 9);
     myPlayerColor = 1;
     startSignaling(gameId);
     
     gameLinkSection.style.display = 'block';
-    // Ligne modifiée ici pour un lien plus robuste
     gameLinkDisplay.innerText = window.location.href.split('?')[0] + '?gameId=' + gameId;
     createGameBtn.style.display = 'none';
     joinGameSection.style.display = 'none';
@@ -463,13 +517,13 @@ joinGameBtn.addEventListener('click', () => {
     const gameId = gameIdInput.value;
     myPlayerColor = 2;
     startSignaling(gameId);
-    alert('Connexion réussie ! La partie va commencer.');
     
-    welcomeScreen.style.display = 'none';
-    gameScreen.style.display = 'flex';
+    gameLinkSection.style.display = 'none';
+    createGameBtn.style.display = 'none';
+    joinGameSection.style.display = 'none';
 });
 
-// Ligne modifiée ici pour une meilleure détection
+// Gérer le cas où on arrive via un lien de partie
 const urlParams = new URLSearchParams(window.location.search);
 const gameIdFromUrl = urlParams.get('gameId');
 if (gameIdFromUrl) {
