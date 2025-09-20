@@ -1,0 +1,114 @@
+body {
+    background-color: #000; /* Passé en noir */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    font-family: sans-serif;
+}
+
+.game-container {
+    text-align: center;
+}
+
+#goBoard {
+    background-image: url('plateau.png');
+    background-size: 100% 100%;
+    border: 5px solid #664e3f;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.controls {
+    margin-top: 20px;
+}
+
+button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    margin: 0 10px;
+    padding: 0;
+}
+
+button img {
+    width: 150px;
+    height: auto;
+    transition: transform 0.2s ease-in-out;
+}
+
+#passButton img {
+    content: url('pass_no_glow.png');
+}
+
+#passButton:hover img {
+    content: url('pass_glow.png');
+}
+
+#forfeitButton img {
+    /* Ajout de la référence à l'image par défaut */
+    content: url('lose_no_glow.png');
+}
+
+#forfeitButton:hover img {
+    content: url('lose_glow.png');
+}
+.score-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.player-score {
+    padding: 10px 20px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    min-width: 150px;
+    text-align: center;
+}
+.screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: #000;
+    color: white;
+}
+
+#welcomeScreen h1 {
+    font-size: 3em;
+    margin-bottom: 50px;
+}
+
+#welcomeScreen button, #joinGameSection input {
+    font-size: 1.5em;
+    padding: 10px 20px;
+    margin: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#joinGameSection input {
+    background-color: #333;
+    color: white;
+}
+
+#joinGameSection input::placeholder {
+    color: #bbb;
+}
+
+#gameLinkSection {
+    margin-top: 20px;
+    text-align: center;
+}

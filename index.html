@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu de Go</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+</head>
+<body>
+
+    <div id="welcomeScreen" class="screen">
+        <h1>Jeu de Go</h1>
+        <button id="createGameBtn">Créer une partie</button>
+        <div id="joinGameSection" style="display: none;">
+            <input type="text" id="gameIdInput" placeholder="Entrer le code de la partie">
+            <button id="joinGameBtn">Rejoindre</button>
+        </div>
+        <div id="gameLinkSection" style="display: none;">
+            <p>Partage ce lien avec ton ami :</p>
+            <p id="gameLinkDisplay"></p>
+        </div>
+    </div>
+
+    <div id="gameScreen" class="screen" style="display: none;">
+        <div class="score-container">
+            <div id="blackScore" class="player-score">Noir : 0</div>
+            <div id="whiteScore" class="player-score">Blanc : 7.5</div>
+        </div>
+        <canvas id="goBoard" width="600" height="600"></canvas>
+        <div class="controls">
+            <button id="passButton">
+                <img src="pass_no_glow.png" alt="Passer le tour">
+            </button>
+            <button id="forfeitButton">
+                <img src="lose_no_glow.png" alt="Déclarer forfait">
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
