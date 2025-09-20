@@ -73,6 +73,8 @@ let gameId = null;
 let consecutivePasses = 0;
 let gameOver = false;
 
+let gameRef = null;
+
 /* ================================
    WebRTC setup
 ================================= */
@@ -101,6 +103,10 @@ function showMessage(el, text, color = "#bbb") {
 }
 
 function resetGame() {
+    if (gameRef) {
+        gameRef.off();
+        gameRef = null;
+    }
     board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
     history = [];
     currentPlayer = 1;
@@ -113,6 +119,7 @@ function resetGame() {
         peerConnection = null;
     }
     if (dataChannel) {
+        dataChannel.close();
         dataChannel = null;
     }
     renderBoard();
@@ -151,6 +158,7 @@ function drawGrid() {
         star.forEach(y => {
             ctx.beginPath();
             ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = "#000";
             ctx.fill();
         });
     });
@@ -164,6 +172,8 @@ function drawStones() {
                 ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
                 ctx.fillStyle = board[y][x] === 1 ? "#000" : "#fff";
                 ctx.fill();
+                ctx.strokeStyle = board[y][x] === 1 ? "#fff" : "#000";
+                ctx.lineWidth = 1;
                 ctx.stroke();
             }
         }
@@ -222,12 +232,14 @@ function placeStone(x, y, color, state) {
     const newState = copyBoard(state);
     newState[y][x] = color;
 
+    let captures = 0;
     const opponent = color === 1 ? 2 : 1;
     for (let [nx, ny] of getNeighbors(x, y)) {
         if (newState[ny][nx] === opponent) {
             const chain = getChain(nx, ny, opponent, new Set(), newState);
             if (getLiberties(chain, newState) === 0) {
                 chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
+                captures += chain.length;
             }
         }
     }
@@ -235,11 +247,11 @@ function placeStone(x, y, color, state) {
     const chain = getChain(x, y, color, new Set(), newState);
     if (getLiberties(chain, newState) === 0) return null;
 
-    return newState;
+    return { newState, captures };
 }
 
 function boardToString(state) {
-    return state.map(r => r.join("")).join("|");
+    return JSON.stringify(state);
 }
 
 function isLegalMove(x, y, color, state) {
@@ -247,13 +259,13 @@ function isLegalMove(x, y, color, state) {
         showMessage(gameMessage, "This spot is already taken.", "orange");
         return false;
     }
-    const newState = placeStone(x, y, color, state);
-    if (!newState) {
+    const result = placeStone(x, y, color, state);
+    if (!result) {
         showMessage(gameMessage, "Suicide moves are not allowed.", "orange");
         return false;
     }
 
-    const newStateStr = boardToString(newState);
+    const newStateStr = boardToString(result.newState);
     if (history.includes(newStateStr)) {
         showMessage(gameMessage, "Superko rule violation: cannot repeat a previous board state.", "orange");
         return false;
@@ -315,10 +327,12 @@ function playMove(x, y) {
     }
     if (!isLegalMove(x, y, currentPlayer, board)) return;
 
-    board = placeStone(x, y, currentPlayer, board);
+    const result = placeStone(x, y, currentPlayer, board);
+    board = result.newState;
     history.push(boardToString(board));
     currentPlayer = currentPlayer === 1 ? 2 : 1;
     consecutivePasses = 0;
+
     renderBoard();
     updateScore();
 
@@ -418,20 +432,12 @@ async function startSignaling(isCreator) {
             db.ref(`games/${gameId}/${path}`).push(e.candidate);
         }
     };
-
+    
+    // We only create an offer or wait for it once
     if (isCreator) {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         await db.ref("games/" + gameId).update({ offer: offer });
-    } else {
-        const snap = await db.ref("games/" + gameId).once("value");
-        const data = snap.val();
-        if (data && data.offer) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            await db.ref("games/" + gameId).update({ answer: answer });
-        }
     }
 }
 
@@ -517,9 +523,10 @@ async function generateGameId() {
 ================================= */
 createGameBtn.onclick = async() => {
     gameId = await generateGameId();
-    myColor = 1;
+    myColor = 1; // Black
 
-    await db.ref("games/" + gameId).set({
+    gameRef = db.ref("games/" + gameId);
+    await gameRef.set({
         status: "waiting",
         players: {
             black: {
@@ -527,30 +534,41 @@ createGameBtn.onclick = async() => {
                 email: auth.currentUser.email,
                 nickname: myNickname
             }
-        }
+        },
+        board: board, // Store initial state
+        currentPlayer: currentPlayer,
+        history: history
     });
 
     gameLinkSection.style.display = "block";
     gameLinkDisplay.textContent = gameId;
     copyLinkBtn.textContent = "Copy Code";
     showMessage(lobbyMessage, "Game created. Share this code with your opponent!", "lightgreen");
-
-    db.ref("games/" + gameId + "/players/white").on("value", s => {
+    
+    // Listen for the opponent joining
+    gameRef.child("players/white").on("value", s => {
         const whitePlayer = s.val();
         if (whitePlayer && !peerConnection) {
             startSignaling(true);
-            db.ref("games/" + gameId + "/answer").on("value", async s => {
-                const answer = s.val();
-                if (answer) {
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                    showScreen(gameScreen);
-                    showMessage(gameMessage, "Opponent joined! Game starts.");
-                    db.ref("games/" + gameId + "/answer").off("value");
-                    db.ref("games/" + gameId + "/joinerCandidates").on("child_added", s => {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
-                    });
-                }
+        }
+    });
+
+    // Listen for the opponent's answer to start the game
+    gameRef.child("answer").on("value", async s => {
+        const answer = s.val();
+        if (answer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            
+            // Listen for the joiner's ICE candidates
+            gameRef.child("joinerCandidates").on("child_added", s => {
+                peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
             });
+
+            showScreen(gameScreen);
+            showMessage(gameMessage, "Opponent joined! Game starts.");
+            
+            // Stop listening to avoid multiple executions
+            gameRef.child("answer").off("value");
         }
     });
 };
@@ -562,7 +580,7 @@ joinGameBtn.onclick = async() => {
         return;
     }
 
-    const gameRef = db.ref("games/" + gameId);
+    gameRef = db.ref("games/" + gameId);
     const gameSnap = await gameRef.once("value");
     const gameData = gameSnap.val();
 
@@ -574,8 +592,13 @@ joinGameBtn.onclick = async() => {
         showMessage(lobbyMessage, "This game is already full.", "red");
         return;
     }
+    
+    if (gameData.status === 'playing') {
+      showMessage(lobbyMessage, "This game is already in progress.", "red");
+      return;
+    }
 
-    myColor = 2;
+    myColor = 2; // White
     await gameRef.child("players/white").set({
         uid: myUid,
         email: auth.currentUser.email,
@@ -583,13 +606,39 @@ joinGameBtn.onclick = async() => {
     });
     await gameRef.update({ status: "playing" });
 
-    startSignaling(false);
-    showMessage(lobbyMessage, "Joined game!", "lightgreen");
-    showScreen(gameScreen);
-
-    db.ref("games/" + gameId + "/creatorCandidates").on("child_added", s => {
-        peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
+    // Listen for the creator's offer to start signaling
+    gameRef.child("offer").on("value", async s => {
+        const offer = s.val();
+        if (offer) {
+            startSignaling(false);
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            await gameRef.update({ answer: answer });
+            
+            // Listen for the creator's ICE candidates
+            gameRef.child("creatorCandidates").on("child_added", s => {
+                peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
+            });
+            
+            // Get the initial game state from Firebase
+            const gameSnap = await gameRef.once("value");
+            const gameData = gameSnap.val();
+            board = gameData.board || board;
+            currentPlayer = gameData.currentPlayer || currentPlayer;
+            history = gameData.history || history;
+            
+            renderBoard();
+            updateScore();
+            showScreen(gameScreen);
+            showMessage(gameMessage, "Joined game! Waiting for opponent to move.");
+            
+            // Stop listening to avoid multiple executions
+            gameRef.child("offer").off("value");
+        }
     });
+    
+    showMessage(lobbyMessage, "Joined game!", "lightgreen");
 };
 
 copyLinkBtn.onclick = () => {
