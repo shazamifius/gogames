@@ -394,10 +394,12 @@ function setupDataChannel(channel) {
             history = msg.history;
             renderBoard();
             updateScore();
+            showMessage(gameMessage, "Opponent moved. Your turn!");
         } else if (msg.type === "pass") {
             currentPlayer = msg.currentPlayer;
             consecutivePasses++;
             if (consecutivePasses >= 2) endGame();
+            showMessage(gameMessage, "Opponent passed. Your turn!");
         } else if (msg.type === "end") {
             endGame(msg.message);
             handleFinalRedirect();
@@ -413,33 +415,63 @@ function setupDataChannel(channel) {
     };
 }
 
-/* ================================
-   Firebase signaling
-================================= */
+function setupGameListeners(isCreator) {
+    const myCandidatesPath = isCreator ? "creatorCandidates" : "joinerCandidates";
+    const opponentCandidatesPath = isCreator ? "joinerCandidates" : "creatorCandidates";
+    
+    peerConnection.onicecandidate = e => {
+        if (e.candidate) {
+            db.ref(`games/${gameId}/${myCandidatesPath}`).push(e.candidate);
+        }
+    };
+    
+    db.ref(`games/${gameId}/${opponentCandidatesPath}`).on("child_added", s => {
+        peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
+    });
+}
+
 async function startSignaling(isCreator) {
     peerConnection = new RTCPeerConnection(iceServers);
+    setupGameListeners(isCreator);
 
     if (isCreator) {
         dataChannel = peerConnection.createDataChannel("game");
         setupDataChannel(dataChannel);
-    } else {
-        peerConnection.ondatachannel = e => setupDataChannel(e.channel);
-    }
-
-    peerConnection.onicecandidate = e => {
-        if (e.candidate) {
-            const path = isCreator ? "creatorCandidates" : "joinerCandidates";
-            db.ref(`games/${gameId}/${path}`).push(e.candidate);
-        }
-    };
-    
-    // We only create an offer or wait for it once
-    if (isCreator) {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         await db.ref("games/" + gameId).update({ offer: offer });
+    } else {
+        peerConnection.ondatachannel = e => setupDataChannel(e.channel);
+        
+        // Attendre l'offre avant de faire quoi que ce soit
+        db.ref("games/" + gameId + "/offer").on("value", async s => {
+            const offer = s.val();
+            if (offer) {
+                // **MODIFICATION** : Récupérer l'état du jeu avant de créer la réponse
+                const gameSnap = await db.ref("games/" + gameId).once("value");
+                const gameData = gameSnap.val();
+                
+                board = gameData.board;
+                currentPlayer = gameData.currentPlayer;
+                history = gameData.history;
+
+                renderBoard();
+                updateScore();
+                showScreen(gameScreen);
+                showMessage(gameMessage, "Joined game! Waiting for opponent to move.");
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                await db.ref("games/" + gameId).update({ answer: answer });
+                
+                // Stop listening once we've processed the offer
+                db.ref("games/" + gameId + "/offer").off("value");
+            }
+        });
     }
 }
+
 
 /* ================================
    Auth events
@@ -545,7 +577,6 @@ createGameBtn.onclick = async() => {
     copyLinkBtn.textContent = "Copy Code";
     showMessage(lobbyMessage, "Game created. Share this code with your opponent!", "lightgreen");
     
-    // Listen for the opponent joining
     gameRef.child("players/white").on("value", s => {
         const whitePlayer = s.val();
         if (whitePlayer && !peerConnection) {
@@ -553,21 +584,14 @@ createGameBtn.onclick = async() => {
         }
     });
 
-    // Listen for the opponent's answer to start the game
     gameRef.child("answer").on("value", async s => {
         const answer = s.val();
         if (answer) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             
-            // Listen for the joiner's ICE candidates
-            gameRef.child("joinerCandidates").on("child_added", s => {
-                peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
-            });
-
             showScreen(gameScreen);
             showMessage(gameMessage, "Opponent joined! Game starts.");
             
-            // Stop listening to avoid multiple executions
             gameRef.child("answer").off("value");
         }
     });
@@ -606,37 +630,8 @@ joinGameBtn.onclick = async() => {
     });
     await gameRef.update({ status: "playing" });
 
-    // Listen for the creator's offer to start signaling
-    gameRef.child("offer").on("value", async s => {
-        const offer = s.val();
-        if (offer) {
-            startSignaling(false);
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            await gameRef.update({ answer: answer });
-            
-            // Listen for the creator's ICE candidates
-            gameRef.child("creatorCandidates").on("child_added", s => {
-                peerConnection.addIceCandidate(new RTCIceCandidate(s.val()));
-            });
-            
-            // Get the initial game state from Firebase
-            const gameSnap = await gameRef.once("value");
-            const gameData = gameSnap.val();
-            board = gameData.board || board;
-            currentPlayer = gameData.currentPlayer || currentPlayer;
-            history = gameData.history || history;
-            
-            renderBoard();
-            updateScore();
-            showScreen(gameScreen);
-            showMessage(gameMessage, "Joined game! Waiting for opponent to move.");
-            
-            // Stop listening to avoid multiple executions
-            gameRef.child("offer").off("value");
-        }
-    });
+    // Lancer la signalisation et attendre l'offre
+    startSignaling(false);
     
     showMessage(lobbyMessage, "Joined game!", "lightgreen");
 };
