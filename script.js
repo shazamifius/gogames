@@ -549,78 +549,68 @@ auth.onAuthStateChanged(async user => {
 async function generateGameId() {
     let newId, isUnique = false;
     while (!isUnique) {
-        newId = Math.floor(100000 + Math.random() * 900000);
+        // Génère un nombre aléatoire entre 1000 et 9999
+        newId = Math.floor(1000 + Math.random() * 9000);
         const snapshot = await db.ref(`games/${newId}`).once('value');
-        if (!snapshot.exists()) isUnique = true;
+        // Vérifie si l'ID n'existe pas déjà
+        if (!snapshot.exists()) {
+            isUnique = true;
+        }
     }
     return newId.toString();
 }
+/* ... (tout le reste de ton script) ... */
 
+// Assure-toi que cette partie est bien à la fin du fichier script.js
 createGameBtn.onclick = async () => {
-    await resetIfAny();
-    gameId = await generateGameId();
-    myColor = 1; // Black
-    gameRef = db.ref(`games/${gameId}`);
+    try {
+        // Optionnel : afficher un message de chargement
+        showMessage(lobbyMessage, "Création de la partie...", "lightblue");
 
-    // initialize game on server
-    await gameRef.set({
-        status: "waiting",
-        players: {
-            black: {
-                uid: myUid,
-                email: auth.currentUser.email,
-                nickname: myNickname
+        // Assurer que les connexions précédentes sont fermées
+        await resetIfAny();
+
+        // Générer un nouvel ID à 4 chiffres
+        gameId = await generateGameId();
+        myColor = 1; // Joueur noir
+        gameRef = db.ref(`games/${gameId}`);
+
+        // Initialiser la partie sur le serveur
+        await gameRef.set({
+            status: "waiting",
+            players: {
+                black: {
+                    uid: myUid,
+                    email: auth.currentUser.email,
+                    nickname: myNickname
+                }
+            },
+            board: board,
+            currentPlayer: currentPlayer,
+            history: history,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 2 * 60 * 60 * 1000
+        });
+
+        // Mettre à jour l'interface utilisateur
+        gameLinkSection.style.display = "block";
+        gameLinkDisplay.textContent = gameId;
+        copyLinkBtn.textContent = "Copier le code";
+        showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partage-le avec ton adversaire.`, "lightgreen");
+
+        // Mettre en place les écouteurs pour la partie (comme tu l'as déjà fait)
+        // ... (ton code pour les écouteurs reste le même ici) ...
+        const whiteRef = gameRef.child("players/white");
+        whiteRef.on("value", snap => {
+            if (snap.val() && !peerConnection) {
+                startSignaling(true).catch(console.error);
             }
-        },
-        board: board,
-        currentPlayer: currentPlayer,
-        history: history,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + 2 * 60 * 60 * 1000 // expire dans 2 heures
-    });
+        });
 
-
-
-    gameLinkSection.style.display = "block";
-    gameLinkDisplay.textContent = gameId;
-    copyLinkBtn.textContent = "Copy Code";
-    showMessage(lobbyMessage, "Partie créée. Partage le code avec ton adversaire.", "lightgreen");
-
-    // listen for white player to join
-    const whiteRef = gameRef.child("players/white");
-    whiteRef.on("value", snap => {
-        if (snap.val() && !peerConnection) {
-            // start signaling as creator when someone joined
-            startSignaling(true).catch(console.error);
-        }
-    });
-
-    // answer will be set by joiner
-    const answerRef = gameRef.child("answer");
-    answerRef.on("value", async snap => {
-        const answer = snap.val();
-        if (answer && peerConnection && peerConnection.signalingState !== "stable") {
-            try {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                showScreen(gameScreen);
-                showMessage(gameMessage, "Adversaire connecté ! Début de la partie.", "lightgreen");
-                answerRef.off();
-            } catch (err) { console.error("setRemoteDescription failed:", err); }
-        }
-    });
-
-    // always listen to firebase state changes as a fallback
-    gameRef.on("value", snap => {
-        const data = snap.val();
-        if (!data) return;
-
-        board = data.board;
-        currentPlayer = data.currentPlayer;
-        history = data.history || [];
-
-        renderBoard();
-        updateScore();
-    });
+    } catch (err) {
+        console.error("Erreur lors de la création de la partie :", err);
+        showMessage(lobbyMessage, "Erreur lors de la création de la partie.", "red");
+    }
 };
 
 joinGameBtn.onclick = async () => {
