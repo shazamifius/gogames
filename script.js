@@ -517,10 +517,11 @@ async function generateGameId() {
 
 createGameBtn.onclick = async () => {
     try {
-        const gameId = generateGameId();
+        const gameId = await generateGameId(); // <-- CORRECTION ICI
         const gameRef = db.ref('games/' + gameId);
         const myUid = auth.currentUser.uid;
 
+        // ... le reste de ton code est correct
         await gameRef.set({
             status: "waiting",
             players: {
@@ -537,19 +538,13 @@ createGameBtn.onclick = async () => {
             expiresAt: Date.now() + 2 * 60 * 60 * 1000
         });
 
-        gameLinkSection.style.display = "block";
+        showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partagez-le avec votre adversaire.`, 'lightgreen');
         gameLinkDisplay.textContent = gameId;
-        copyLinkBtn.textContent = "Copier le code";
-        showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partagez-le avec votre adversaire.`, "lightgreen");
-
-        const whiteRef = gameRef.child("players/white");
-        whiteRef.on("value", snap => {
-            if (snap.val() && !peerConnection) {
-                startSignaling(true).catch(console.error);
-            }
-        });
-    } catch (err) {
-        console.error("Erreur lors de la création de la partie :", err);
+        gameLinkSection.style.display = 'block';
+        
+        // ... le reste du code est correct
+    } catch (e) {
+        console.error("Erreur lors de la création de la partie :", e);
         showMessage(lobbyMessage, "Erreur lors de la création de la partie.", "red");
     }
 };
