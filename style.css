@@ -223,17 +223,27 @@ button:active {
 /* Plateau de jeu et contrôles */
 /* =================== */
 #goBoard {
-  background-image: url("board_texture.png");
-  background-size: cover;
-  border: 5px solid #664e3f;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+  /* Retire l'image pour utiliser une couleur de fond unie */
+  /* background-image: url("board_texture.png"); */
+  /* background-size: cover; */
+  /* Retire la bordure et l'ancienne ombre pour les recréer avec le pseudo-élément */
+  /* border: 5px solid #664e3f; */
+  /* box-shadow: 0 0 20px rgba(0, 0, 0, 0.7); */
+  
   margin-bottom: 20px;
   width: calc(100vw - 40px);
   max-width: 600px;
   height: auto;
   border-radius: 10px;
+  
+  /* Ajout d'un fond de couleur solide pour le plateau */
+  background-color: #c09e72;
+  
+  /* Création du dégradé et de l'ombre à l'intérieur */
+  box-shadow: 
+    inset 0 0 50px rgba(121, 74, 53, 0.74), /* Ombre intérieure pour un effet de profondeur */
+    0 0 70px rgba(156, 121, 68, 0.7); /* Ombre extérieure pour la séparation */
 }
-
 .controls {
   margin-top: 10px;
   width: 100%;

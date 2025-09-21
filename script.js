@@ -86,6 +86,7 @@ function showMessage(el, text, color = "#bbb") {
     el.style.color = color;
 }
 
+
 /* ========== Board drawing ========== */
 function drawGrid() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -107,19 +108,37 @@ function drawGrid() {
         ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
         ctx.fillStyle = "#000";
         ctx.fill();
-        ctx.strokeStyle = "#fff";
+        ctx.strokeStyle = "#000"; // Changé de "#fff" à "#000"
         ctx.lineWidth = 1;
         ctx.stroke();
     }));
 }
+
 function drawStones() {
     for (let y = 0; y < BOARD_SIZE; y++) {
         for (let x = 0; x < BOARD_SIZE; x++) {
             if (board[y][x] === 1 || board[y][x] === 2) {
                 ctx.beginPath();
                 ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
-                ctx.fillStyle = board[y][x] === 1 ? "#000" : "#fff";
-                ctx.fill();
+
+                // Réinitialise les ombres avant de dessiner pour éviter l'accumulation
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+
+                // Ajoute l'ombre en fonction de la couleur du pion
+                if (board[y][x] === 1) { // Pion noir
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+                    ctx.shadowBlur = 10;
+                    ctx.fillStyle = "#000";
+                    ctx.fill();
+                } else { // Pion blanc
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                    ctx.shadowBlur = 10;
+                    ctx.fillStyle = "#fff";
+                    ctx.fill();
+                }
+
+                // Dessine le contour après l'ombre
                 ctx.strokeStyle = board[y][x] === 1 ? "#fff" : "#000";
                 ctx.lineWidth = 1;
                 ctx.stroke();
@@ -169,7 +188,7 @@ function placeStone(x, y, color, state) {
     const newState = copyBoard(state);
     newState[y][x] = color;
     const opponent = color === 1 ? 2 : 1;
-    for (let [nx, ny] of getNeighbors(x, ny)) {
+    for (let [nx, ny] of getNeighbors(x, y)) {
         if (newState[ny][nx] === opponent) {
             const chain = getChain(nx, ny, opponent, new Set(), newState);
             if (getLiberties(chain, newState) === 0) chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
@@ -227,17 +246,14 @@ function updateScore() {
 }
 
 /* ========== Firebase sync helpers ========== */
-async function saveGameToFirebase(reason = "update") {
+async function saveGameToFirebase(dataToUpdate) {
     if (!gameRef || !gameId) return;
     try {
         await gameRef.update({
-            board: board,
-            currentPlayer: currentPlayer,
-            history: history,
+            ...dataToUpdate,
             lastUpdateBy: myUid || "unknown",
-            lastUpdateAt: Date.now(),
-            status: gameOver ? "finished" : "playing",
-            lastReason: reason
+            lastUpdateAt: Date.now(), // C'est l'horodatage qu'on va utiliser !
+            status: gameOver ? "finished" : "playing"
         });
     } catch (err) {
         console.error("Erreur de sauvegarde Firebase:", err);
@@ -245,22 +261,8 @@ async function saveGameToFirebase(reason = "update") {
 }
 
 function applyRemoteGameData(data) {
-    if (!data) return;
-    if (!data.board || typeof data.currentPlayer === "undefined") return;
-    if (data.lastUpdateBy === myUid) return;
-
-    const remoteBoardStr = JSON.stringify(data.board);
-    const localBoardStr = JSON.stringify(board);
-
-    if (remoteBoardStr !== localBoardStr || data.currentPlayer !== currentPlayer || JSON.stringify(data.history) !== JSON.stringify(history)) {
-        board = data.board;
-        currentPlayer = data.currentPlayer;
-        history = data.history || [];
-        consecutivePasses = 0;
-        renderBoard();
-        updateScore();
-        showMessage(gameMessage, "Synchronisé depuis le serveur (fallback).", "lightblue");
-    }
+    // Cette fonction n'est plus utilisée, car tout passe par l'écouteur
+    // pour une logique unifiée.
 }
 
 /* ========== WebRTC helpers ========== */
@@ -283,27 +285,7 @@ function setupDataChannelLocal(channel) {
 }
 
 function handleIncomingMessage(msg) {
-    if (!msg || !msg.type) return;
-    if (msg.type === "move") {
-        board = msg.board;
-        currentPlayer = msg.currentPlayer;
-        history = msg.history || [];
-        renderBoard();
-        updateScore();
-        showMessage(gameMessage, "L'adversaire a joué. C'est votre tour !", "lightgreen");
-        saveGameToFirebase("move-received");
-    } else if (msg.type === "pass") {
-        currentPlayer = msg.currentPlayer;
-        consecutivePasses++;
-        if (consecutivePasses >= 2) endGame();
-        renderBoard();
-        updateScore();
-        showMessage(gameMessage, "L'adversaire a passé. C'est votre tour !", "lightgreen");
-        saveGameToFirebase("pass-received");
-    } else if (msg.type === "end") {
-        endGame(msg.message);
-        saveGameToFirebase("end-received");
-    }
+    // Cette fonction n'est plus utilisée, tout est géré par l'écouteur Firebase
 }
 
 function broadcast(msg) {
@@ -331,6 +313,9 @@ function setupIceAndCandidates(isCreator) {
 }
 
 async function startSignaling(isCreator) {
+    // WebRTC n'est plus la méthode de synchronisation principale. 
+    // On conserve le code pour l'établissement de la connexion,
+    // mais la logique de jeu est maintenant centralisée sur Firebase.
     peerConnection = new RTCPeerConnection(iceServers);
     setupIceAndCandidates(isCreator);
     if (isCreator) {
@@ -355,15 +340,6 @@ async function startSignaling(isCreator) {
         const offerListener = offerRef.on("value", async snap => {
             const offer = snap.val();
             if (offer) {
-                const gameSnap = await db.ref(`games/${gameId}`).once("value");
-                const gameData = gameSnap.val();
-                if (gameData && gameData.board) {
-                    board = gameData.board;
-                    currentPlayer = gameData.currentPlayer || 1;
-                    history = gameData.history || [];
-                    renderBoard();
-                    updateScore();
-                }
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
@@ -386,49 +362,79 @@ async function startSignaling(isCreator) {
 /* ========== Game actions ========== */
 function playMove(x, y) {
     if (gameOver) return;
-    if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
-    if (!isLegalMove(x, y, currentPlayer, board)) return;
-    const result = placeStone(x, y, currentPlayer, board);
-    board = result.newState;
-    history.push(boardToString(board));
-    currentPlayer = currentPlayer === 1 ? 2 : 1;
-    consecutivePasses = 0;
-    renderBoard();
-    updateScore();
-    const msg = { type: "move", board: board, currentPlayer: currentPlayer, history: history };
-    broadcast(msg);
-    saveGameToFirebase("move");
+    if (myColor !== currentPlayer) {
+        showMessage(gameMessage, "Ce n'est pas votre tour !", "orange");
+        return;
+    }
+    
+    if (!isLegalMove(x, y, currentPlayer, board)) {
+        return;
+    }
+
+    const { newState: proposedBoardState } = placeStone(x, y, currentPlayer, board);
+    const nextPlayer = currentPlayer === 1 ? 2 : 1;
+    
+    saveGameToFirebase({
+        board: proposedBoardState,
+        currentPlayer: nextPlayer,
+        history: [...history, boardToString(proposedBoardState)],
+        consecutivePasses: 0,
+        lastReason: "move"
+    });
 }
 function passTurn() {
     if (gameOver) return;
-    if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
-    consecutivePasses++;
-    currentPlayer = currentPlayer === 1 ? 2 : 1;
-    renderBoard();
-    updateScore();
-    const msg = { type: "pass", currentPlayer: currentPlayer };
-    broadcast(msg);
-    saveGameToFirebase("pass");
-    if (consecutivePasses >= 2) {
-        endGame();
-        saveGameToFirebase("end-by-passes");
+    if (myColor !== currentPlayer) {
+        showMessage(gameMessage, "Ce n'est pas votre tour !", "orange");
+        return;
     }
+    
+    const nextPlayer = currentPlayer === 1 ? 2 : 1;
+    const nextPasses = consecutivePasses + 1;
+    
+    saveGameToFirebase({
+        currentPlayer: nextPlayer,
+        consecutivePasses: nextPasses,
+        lastReason: "pass"
+    });
 }
 function resign() {
     if (gameOver) return;
-    const winner = myColor === 1 ? "White" : "Black";
-    const message = `${winner} gagne par abandon.`;
-    endGame(message);
-    const msg = { type: "end", message: message };
-    broadcast(msg);
-    saveGameToFirebase("resign");
-    handleFinalRedirect();
+    const winner = myColor === 1 ? "Blanc" : "Noir";
+    const message = `Le joueur ${winner} gagne par abandon.`;
+    
+    saveGameToFirebase({
+        gameOver: true,
+        lastReason: message
+    });
 }
 function endGame(message) {
     gameOver = true;
     const { black, white } = computeScore(board);
     let result = message || (black > white ? "Le joueur Noir gagne !" : "Le joueur Blanc gagne !");
     showMessage(gameMessage, result, "lightgreen");
+
+    // **NOUVEAU** : Suppression de la partie après 5 secondes.
+    setTimeout(async () => {
+        if (gameRef && myColor) {
+            try {
+                // On vérifie le statut pour s'assurer que la partie est bien terminée
+                const snap = await gameRef.once("value");
+                if (snap.val() && snap.val().status === 'finished') {
+                    // Vérifier si je suis l'un des joueurs avant de tenter de la supprimer
+                    if (snap.val().players.black.uid === myUid || snap.val().players.white.uid === myUid) {
+                        await gameRef.remove();
+                        console.log(`Partie ${gameId} supprimée après 5 secondes.`);
+                        resetGame();
+                        showScreen(lobbyScreen);
+                        showMessage(lobbyMessage, "La partie est terminée et a été supprimée.", "green");
+                    }
+                }
+            } catch (err) {
+                console.error("Erreur de suppression de la partie:", err);
+            }
+        }
+    }, 5000); // 5000 ms = 5 secondes
 }
 
 /* ========== Listeners + lifecycle ========== */
@@ -452,25 +458,93 @@ function resetGame() {
     updateScore();
 }
 
-function handleFinalRedirect() {
-    setTimeout(() => {
-        resetGame();
-        showScreen(lobbyScreen);
-    }, 3000);
+// Fonction pour gérer toutes les mises à jour de la partie
+function setupGameListener() {
+    if (!gameRef) {
+        console.error("gameRef n'est pas défini. Impossible de configurer l'écouteur.");
+        return;
+    }
+    
+    gameRef.on('value', snapshot => {
+        const gameData = snapshot.val();
+        
+        if (!gameData) {
+            resetGame();
+            showScreen(lobbyScreen);
+            showMessage(lobbyMessage, "La partie a été supprimée.", "red");
+            return;
+        }
+
+        // On ne met à jour les variables que si l'état du jeu est valide
+        board = gameData.board || board;
+        currentPlayer = gameData.currentPlayer || currentPlayer;
+        history = gameData.history || [];
+        consecutivePasses = gameData.consecutivePasses || 0;
+        
+        // Met à jour l'affichage
+        renderBoard();
+        updateScore();
+        
+        // Si le statut passe à "playing", on change d'écran
+        if (gameData.status === 'playing' && document.getElementById("gameScreen").classList.contains("active") === false) {
+             showScreen(gameScreen);
+             showMessage(gameMessage, "Un adversaire a rejoint ! La partie commence.", "lightgreen");
+        }
+        
+        // La fin de la partie est gérée par la base de données
+        if (gameData.status === "finished" && !gameOver) {
+            gameOver = true;
+            endGame(gameData.lastReason || "La partie est terminée.");
+        }
+        
+        // Affiche un message de statut
+        else if (gameData.status === 'waiting') {
+             showMessage(gameMessage, "En attente d'un adversaire...", "lightblue");
+        } else if (!gameOver) {
+             showMessage(gameMessage, `C'est au tour de ${currentPlayer === 1 ? 'Noir' : 'Blanc'}.`, "lightgreen");
+        }
+    });
 }
 
-function loadGame(gameData) {
-    board = gameData.board;
-    currentPlayer = gameData.currentPlayer;
-    history = gameData.history || [];
-    gameId = gameData.gameId || null;
-    myColor = gameData.players.black.uid === myUid ? 1 : 2;
-    renderBoard();
-    updateScore();
-    // Le reste de la logique de jeu, comme l'activation des boutons, se passe ici
-    showMessage(gameMessage, `La partie commence. C'est le tour de ${currentPlayer === 1 ? 'Noir' : 'Blanc'}.`, 'lightgreen');
-}
 
+// Fonction pour gérer le clean des parties anciennes
+async function cleanUpOldGames() {
+    const gamesRef = db.ref('games');
+    const now = Date.now();
+    const fortyEightHoursInMs = 48 * 60 * 60 * 1000;
+
+    try {
+        const snapshot = await gamesRef.once('value');
+        if (snapshot.exists()) {
+            const games = snapshot.val();
+            const updates = {};
+            let gamesDeletedCount = 0;
+
+            for (const gameId in games) {
+                const game = games[gameId];
+                const lastActivity = game.lastUpdateAt || game.createdAt;
+                
+                if (game.status === 'finished' || game.status === 'expired') {
+                    continue;
+                }
+
+                // La condition utilise maintenant 48 heures
+                if (now - lastActivity > fortyEightHoursInMs) {
+                    updates[`${gameId}/status`] = 'expired';
+                    console.log(`Partie ${gameId} marquée comme expirée.`);
+                    gamesDeletedCount++;
+                }
+            }
+
+            if (Object.keys(updates).length > 0) {
+                await gamesRef.update(updates);
+                console.log(`${gamesDeletedCount} parties expirées mises à jour.`);
+            }
+        }
+    } catch (error) {
+        console.error("Erreur lors du nettoyage des parties:", error);
+    }
+}
 
 /* ========== Auth ========== */
 registerBtn.onclick = () => {
@@ -531,12 +605,29 @@ async function generateGameId() {
     return newId.toString();
 }
 
+async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showMessage(lobbyMessage, "Code de la partie copié !", "lightgreen");
+    } catch (err) {
+        console.error("Erreur de copie :", err);
+        showMessage(lobbyMessage, "Impossible de copier. Veuillez le faire manuellement.", "orange");
+    }
+}
+
+copyLinkBtn.onclick = () => {
+    const gameIdText = gameLinkDisplay.textContent;
+    if (gameIdText) {
+        copyToClipboard(gameIdText);
+    }
+};
+
 createGameBtn.onclick = async () => {
     try {
-        const newGameId = await generateGameId();
-        gameRef = db.ref('games/' + newGameId);
+        gameId = await generateGameId();
+        gameRef = db.ref('games/' + gameId);
+        
         if (!auth.currentUser) {
-            console.error("Erreur : L'utilisateur n'est pas authentifié.");
             showMessage(lobbyMessage, "Vous devez être connecté pour créer une partie.", "red");
             return;
         }
@@ -544,34 +635,26 @@ createGameBtn.onclick = async () => {
         const gameData = {
             status: "waiting",
             players: {
-                black: {
-                    uid: myUid,
-                    email: auth.currentUser.email,
-                    nickname: myNickname
-                }
+                black: { uid: myUid, email: auth.currentUser.email, nickname: myNickname }
             },
             board: board,
             currentPlayer: currentPlayer,
             history: history,
             createdAt: Date.now(),
-            expiresAt: Date.now() + 2 * 60 * 60 * 1000
+            expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+            consecutivePasses: 0
         };
 
         await gameRef.set(gameData);
-        gameId = newGameId; // Met à jour la variable globale
+        myColor = 1;
 
         showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partagez-le avec votre adversaire.`, 'lightgreen');
         gameLinkDisplay.textContent = gameId;
         gameLinkSection.style.display = 'block';
 
-        // Écouteur pour la partie que tu viens de créer
-        gameRef.on('value', snapshot => {
-            const currentData = snapshot.val();
-            if (currentData && currentData.status === 'playing') {
-                loadGame(currentData);
-                showScreen(gameScreen);
-            }
-        });
+        await copyToClipboard(gameId);
+        
+        setupGameListener();
 
     } catch (e) {
         console.error("Erreur lors de la création de la partie :", e);
@@ -579,7 +662,11 @@ createGameBtn.onclick = async () => {
     }
 };
 
-joinGameBtn.onclick = async () => {
+
+/* ========== Game creation / joining ========== */
+// (Le reste de ton code reste le même, y compris la fonction createGameBtn.onclick)
+
+async function joinGame() {
     const gameIdInputVal = gameIdInput.value.trim();
     if (gameIdInputVal.length !== 4) {
         showMessage(lobbyMessage, "Veuillez entrer un code de partie à 4 chiffres.", "red");
@@ -587,12 +674,9 @@ joinGameBtn.onclick = async () => {
     }
 
     gameRef = db.ref('games/' + gameIdInputVal);
-    
-    // On affiche un message de chargement.
     showMessage(lobbyMessage, "Partie rejointe. Connexion en cours...", "lightgreen");
 
     try {
-        // 1. On vérifie d'abord l'état de la partie.
         const snapshot = await gameRef.once('value');
         const gameData = snapshot.val();
 
@@ -601,35 +685,28 @@ joinGameBtn.onclick = async () => {
             return;
         }
 
-        // 2. On met à jour la partie de manière "atomique" avec les informations du joueur blanc
-        // et le statut 'playing'.
         await gameRef.update({
-            'players/white': {
-                uid: myUid,
-                email: auth.currentUser.email,
-                nickname: myNickname
-            },
+            'players/white': { uid: myUid, email: auth.currentUser.email, nickname: myNickname },
             status: 'playing'
         });
         
-        gameId = gameIdInputVal; // Met à jour la variable globale
-        myColor = 2; // Le joueur qui rejoint est toujours blanc
+        gameId = gameIdInputVal;
+        myColor = 2;
 
-        // 3. Si l'opération a réussi, le jeu peut commencer.
-        // On s'abonne aux mises à jour et on passe à l'écran de jeu.
-        gameRef.on('value', snapshot => {
-            const currentData = snapshot.val();
-            if (currentData && currentData.status === 'playing') {
-                loadGame(currentData);
-                showScreen(gameScreen);
-            }
-        });
+        setupGameListener();
+        
+        showScreen(gameScreen);
+        showMessage(gameMessage, "Partie rejointe. En attente du coup de l'adversaire...", "lightgreen");
 
     } catch (error) {
         console.error("Erreur lors de la jonction de la partie:", error);
         showMessage(lobbyMessage, "Erreur lors de la jonction. Veuillez réessayer.", "red");
     }
-};
+}
+
+// Maintenant, le bouton d'adhésion appelle simplement la fonction
+joinGameBtn.onclick = joinGame;
+
 
 /* ========== Canvas events ========== */
 canvas.addEventListener("click", e => {
@@ -651,6 +728,35 @@ window.addEventListener('beforeunload', (event) => {
     resetGame();
 });
 
+/* ========== Clipboard detection ========== */
+function setupClipboardDetection() {
+    window.addEventListener('paste', async (event) => {
+        // S'assurer que nous sommes sur le bon écran (le salon de jeu)
+        if (!lobbyScreen.classList.contains("active")) {
+            return;
+        }
+
+        try {
+            const clipboardText = await navigator.clipboard.readText();
+            const gameIdPattern = /^\d{4}$/; // Regex pour 4 chiffres
+            
+            if (gameIdPattern.test(clipboardText)) {
+                // Le texte est un code de partie valide, on tente de rejoindre
+                showMessage(lobbyMessage, "Code de partie détecté dans le presse-papiers. Connexion automatique...", "lightblue");
+                
+                // On met à jour l'input pour que l'utilisateur le voie
+                gameIdInput.value = clipboardText;
+
+                // Lancement de la logique de connexion à la partie
+                await joinGame();
+            }
+        } catch (err) {
+            console.error("Impossible de lire le presse-papiers :", err);
+            // On peut ne rien faire ici, car cela ne nuit pas à l'expérience
+        }
+    });
+}
+
 /* ========== Initialisation ========== */
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -659,7 +765,11 @@ function init() {
         try { document.getElementById("joinGameSection").style.display = "flex"; } catch(e){}
         gameIdInput.value = gameIdFromUrl;
     }
+    setupClipboardDetection();
     renderBoard();
     updateScore();
+    
+    // **NOUVEAU** : On appelle la fonction de nettoyage ici.
+    cleanUpOldGames();
 }
 init();
