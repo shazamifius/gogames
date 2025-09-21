@@ -70,6 +70,7 @@ let gameId = null;
 let consecutivePasses = 0;
 let gameOver = false;
 let gameRef = null;
+let hoverPoint = null;
 
 /* ========== WebRTC ========== */
 let peerConnection = null;
@@ -113,6 +114,79 @@ function drawGrid() {
         ctx.stroke();
     }));
 }
+/* ========== GESTION DU SURVOL (OVER POINT) ========== */
+
+function drawHoverPoint() {
+    if (hoverPoint) {
+        const [x, y, isLegal] = hoverPoint;
+
+        if (isLegal) {
+            // Dessine le pion de survol
+            ctx.beginPath();
+            ctx.fillStyle = myColor === 1 ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+            ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = myColor === 1 ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        } else {
+            // Dessine la croix
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; // Couleur rouge pour la croix
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            // Première ligne de la croix
+            ctx.moveTo((x + 1) * CELL_SIZE - CELL_SIZE / 3, (y + 1) * CELL_SIZE - CELL_SIZE / 3);
+            ctx.lineTo((x + 1) * CELL_SIZE + CELL_SIZE / 3, (y + 1) * CELL_SIZE + CELL_SIZE / 3);
+            // Deuxième ligne de la croix
+            ctx.moveTo((x + 1) * CELL_SIZE + CELL_SIZE / 3, (y + 1) * CELL_SIZE - CELL_SIZE / 3);
+            ctx.lineTo((x + 1) * CELL_SIZE - CELL_SIZE / 3, (y + 1) * CELL_SIZE + CELL_SIZE / 3);
+            ctx.stroke();
+        }
+    }
+}
+
+// Fonction pour mettre à jour la position du point de survol
+function updateHoverPoint(e) {
+    if (gameOver || myColor !== currentPlayer) {
+        hoverPoint = null;
+        renderBoard();
+        return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+    if (clientX === undefined || clientY === undefined) return;
+
+    const x = Math.round(((clientX - rect.left) * scaleX) / CELL_SIZE) - 1;
+    const y = Math.round(((clientY - rect.top) * scaleY) / CELL_SIZE) - 1;
+
+    // On vérifie si le coup est légal avant de dessiner
+    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+        const isLegal = isLegalMove(x, y, currentPlayer, board);
+        if (isLegal) {
+            if (!hoverPoint || hoverPoint[0] !== x || hoverPoint[1] !== y || hoverPoint[2] !== true) {
+                hoverPoint = [x, y, true]; // Ajout d'un 3e élément pour dire que c'est un point
+                renderBoard();
+            }
+        } else {
+            if (!hoverPoint || hoverPoint[0] !== x || hoverPoint[1] !== y || hoverPoint[2] !== false) {
+                hoverPoint = [x, y, false]; // Ajout d'un 3e élément pour dire que c'est une croix
+                renderBoard();
+            }
+        }
+    } else {
+        if (hoverPoint) {
+            hoverPoint = null;
+            renderBoard();
+        }
+    }
+}
+
 
 function drawStones() {
     for (let y = 0; y < BOARD_SIZE; y++) {
@@ -120,25 +194,20 @@ function drawStones() {
             if (board[y][x] === 1 || board[y][x] === 2) {
                 ctx.beginPath();
                 ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
-
-                // Réinitialise les ombres avant de dessiner pour éviter l'accumulation
+                
+                // On réinitialise l'ombre juste au cas où une autre fonction l'aurait activée
                 ctx.shadowColor = 'transparent';
                 ctx.shadowBlur = 0;
 
-                // Ajoute l'ombre en fonction de la couleur du pion
+                // On dessine le pion sans ombre
                 if (board[y][x] === 1) { // Pion noir
-                    ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
-                    ctx.shadowBlur = 10;
                     ctx.fillStyle = "#000";
-                    ctx.fill();
                 } else { // Pion blanc
-                    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-                    ctx.shadowBlur = 10;
                     ctx.fillStyle = "#fff";
-                    ctx.fill();
                 }
+                ctx.fill();
 
-                // Dessine le contour après l'ombre
+                // Dessine le contour après
                 ctx.strokeStyle = board[y][x] === 1 ? "#fff" : "#000";
                 ctx.lineWidth = 1;
                 ctx.stroke();
@@ -149,6 +218,7 @@ function drawStones() {
 function renderBoard() {
     drawGrid();
     drawStones();
+    drawHoverPoint();
 }
 
 /* ========== Rules helpers ========== */
@@ -358,6 +428,8 @@ async function startSignaling(isCreator) {
         }
     };
 }
+
+
 
 /* ========== Game actions ========== */
 function playMove(x, y) {
@@ -708,25 +780,107 @@ async function joinGame() {
 joinGameBtn.onclick = joinGame;
 
 
+
 /* ========== Canvas events ========== */
+
+// Fonction pour dessiner le point de survol
+function drawHoverPoint() {
+    if (hoverPoint) {
+        const [x, y, isLegal] = hoverPoint;
+
+        if (isLegal) {
+            // Dessine le pion de survol
+            ctx.beginPath();
+            ctx.fillStyle = currentPlayer === 1 ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+            ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = currentPlayer === 1 ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        } else {
+            // Dessine la croix
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; // Couleur rouge pour la croix
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            // Première ligne de la croix
+            ctx.moveTo((x + 1) * CELL_SIZE - CELL_SIZE / 3, (y + 1) * CELL_SIZE - CELL_SIZE / 3);
+            ctx.lineTo((x + 1) * CELL_SIZE + CELL_SIZE / 3, (y + 1) * CELL_SIZE + CELL_SIZE / 3);
+            // Deuxième ligne de la croix
+            ctx.moveTo((x + 1) * CELL_SIZE + CELL_SIZE / 3, (y + 1) * CELL_SIZE - CELL_SIZE / 3);
+            ctx.lineTo((x + 1) * CELL_SIZE - CELL_SIZE / 3, (y + 1) * CELL_SIZE + CELL_SIZE / 3);
+            ctx.stroke();
+        }
+    }
+}
+
+// Fonction pour mettre à jour la position du point de survol
+function updateHoverPoint(e) {
+    if (gameOver || myColor !== currentPlayer) {
+        hoverPoint = null;
+        renderBoard();
+        return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+    if (clientX === undefined || clientY === undefined) return;
+
+    const x = Math.round(((clientX - rect.left) * scaleX) / CELL_SIZE) - 1;
+    const y = Math.round(((clientY - rect.top) * scaleY) / CELL_SIZE) - 1;
+
+    let isLegal; // La variable est déclarée ici !
+
+    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+        isLegal = isLegalMove(x, y, currentPlayer, board);
+
+        if (!hoverPoint || hoverPoint[0] !== x || hoverPoint[1] !== y || (hoverPoint[2] !== isLegal)) {
+            hoverPoint = [x, y, isLegal];
+            renderBoard();
+        }
+    } else {
+        if (hoverPoint) {
+            hoverPoint = null;
+            renderBoard();
+        }
+    }
+}
+
+// Écouteur pour le clic (pour placer un pion)
 canvas.addEventListener("click", e => {
     if (gameOver) return;
     const rect = canvas.getBoundingClientRect();
-    const x = Math.round((e.clientX - rect.left) / CELL_SIZE) - 1;
-    const y = Math.round((e.clientY - rect.top) / CELL_SIZE) - 1;
-    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) playMove(x, y);
-});
-passButton.onclick = passTurn;
-forfeitButton.onclick = resign;
-mainPageLink.onclick = () => { resetGame(); showScreen(lobbyScreen); };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
 
-/* ========== Gestion des déconnexions et du nettoyage ========== */
-window.addEventListener('beforeunload', (event) => {
-    if (gameRef && myColor) {
-        gameRef.child('status').set('disconnected').catch(e => console.error("Erreur de statut de déconnexion:", e));
+    const x = Math.round(((e.clientX - rect.left) * scaleX) / CELL_SIZE) - 1;
+    const y = Math.round(((e.clientY - rect.top) * scaleY) / CELL_SIZE) - 1;
+
+    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+        playMove(x, y);
     }
-    resetGame();
 });
+
+// Écouteurs pour le survol
+canvas.addEventListener("mousemove", updateHoverPoint);
+canvas.addEventListener("touchmove", updateHoverPoint);
+
+// Écouteurs pour la sortie du canvas
+canvas.addEventListener("mouseout", () => {
+    hoverPoint = null;
+    renderBoard();
+});
+
+canvas.addEventListener("touchend", () => {
+    hoverPoint = null;
+    renderBoard();
+});
+
+
 
 /* ========== Clipboard detection ========== */
 function setupClipboardDetection() {
