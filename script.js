@@ -107,6 +107,9 @@ function drawGrid() {
         ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
         ctx.fillStyle = "#000";
         ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
     }));
 }
 function drawStones() {
@@ -142,7 +145,7 @@ function getChain(x, y, color, visited, state) {
         chain.push([cx, cy]);
         for (let [nx, ny] of getNeighbors(cx, cy)) {
             if (!visited.has(`${nx},${ny}`) && state[ny][nx] === color) {
-                visited.add(`${nx},${y}`);
+                visited.add(`${nx},${ny}`);
                 stack.push([nx, ny]);
             }
         }
@@ -166,7 +169,7 @@ function placeStone(x, y, color, state) {
     const newState = copyBoard(state);
     newState[y][x] = color;
     const opponent = color === 1 ? 2 : 1;
-    for (let [nx, ny] of getNeighbors(x, y)) {
+    for (let [nx, ny] of getNeighbors(x, ny)) {
         if (newState[ny][nx] === opponent) {
             const chain = getChain(nx, ny, opponent, new Set(), newState);
             if (getLiberties(chain, newState) === 0) chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
@@ -456,6 +459,19 @@ function handleFinalRedirect() {
     }, 3000);
 }
 
+function loadGame(gameData) {
+    board = gameData.board;
+    currentPlayer = gameData.currentPlayer;
+    history = gameData.history || [];
+    gameId = gameData.gameId || null;
+    myColor = gameData.players.black.uid === myUid ? 1 : 2;
+    renderBoard();
+    updateScore();
+    // Le reste de la logique de jeu, comme l'activation des boutons, se passe ici
+    showMessage(gameMessage, `La partie commence. C'est le tour de ${currentPlayer === 1 ? 'Noir' : 'Blanc'}.`, 'lightgreen');
+}
+
+
 /* ========== Auth ========== */
 registerBtn.onclick = () => {
     auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value)
@@ -515,21 +531,17 @@ async function generateGameId() {
     return newId.toString();
 }
 
-
 createGameBtn.onclick = async () => {
     try {
-        const gameId = await generateGameId(); // <-- CORRECTION ICI
-        const gameRef = db.ref('games/' + gameId);
-        const myUid = auth.currentUser.uid;
-        
-        // S'assurer que l'utilisateur est bien authentifié avant de continuer
+        const newGameId = await generateGameId();
+        gameRef = db.ref('games/' + newGameId);
         if (!auth.currentUser) {
             console.error("Erreur : L'utilisateur n'est pas authentifié.");
             showMessage(lobbyMessage, "Vous devez être connecté pour créer une partie.", "red");
             return;
         }
 
-        await gameRef.set({
+        const gameData = {
             status: "waiting",
             players: {
                 black: {
@@ -543,12 +555,23 @@ createGameBtn.onclick = async () => {
             history: history,
             createdAt: Date.now(),
             expiresAt: Date.now() + 2 * 60 * 60 * 1000
-        });
+        };
 
-        // Le reste de ton code après la création de la partie
+        await gameRef.set(gameData);
+        gameId = newGameId; // Met à jour la variable globale
+
         showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partagez-le avec votre adversaire.`, 'lightgreen');
         gameLinkDisplay.textContent = gameId;
         gameLinkSection.style.display = 'block';
+
+        // Écouteur pour la partie que tu viens de créer
+        gameRef.on('value', snapshot => {
+            const currentData = snapshot.val();
+            if (currentData && currentData.status === 'playing') {
+                loadGame(currentData);
+                showScreen(gameScreen);
+            }
+        });
 
     } catch (e) {
         console.error("Erreur lors de la création de la partie :", e);
@@ -557,34 +580,55 @@ createGameBtn.onclick = async () => {
 };
 
 joinGameBtn.onclick = async () => {
-    await resetGame();
-    gameId = gameIdInput.value.trim();
-    if (!gameId || isNaN(gameId)) { showMessage(lobbyMessage, "Entrez un code de partie valide.", "red"); return; }
-    gameRef = db.ref(`games/${gameId}`);
-    const gameSnap = await gameRef.once("value");
-    const gameData = gameSnap.val();
-    if (!gameSnap.exists()) { showMessage(lobbyMessage, "Partie introuvable !", "red"); return; }
-    if (gameData.players && gameData.players.white) { showMessage(lobbyMessage, "Cette partie est déjà complète.", "red"); return; }
-    if (gameData.status === "playing") { showMessage(lobbyMessage, "Cette partie est en cours.", "red"); return; }
-    myColor = 2; // White
-    await gameRef.child("players/white").set({ uid: myUid, email: auth.currentUser.email, nickname: myNickname });
-    await gameRef.update({ status: "playing" });
-    gameRef.on("value", snap => {
-        const data = snap.val();
-        if (!data) return;
-        board = data.board;
-        currentPlayer = data.currentPlayer;
-        history = data.history || [];
-        renderBoard();
-        updateScore();
-    });
-    startSignaling(false).catch(console.error);
-    showMessage(lobbyMessage, "Partie rejointe. Connexion en cours...", "lightgreen");
-};
+    const gameIdInputVal = gameIdInput.value.trim();
+    if (gameIdInputVal.length !== 4) {
+        showMessage(lobbyMessage, "Veuillez entrer un code de partie à 4 chiffres.", "red");
+        return;
+    }
 
-copyLinkBtn.onclick = () => {
-    navigator.clipboard.writeText(gameLinkDisplay.textContent);
-    showMessage(lobbyMessage, "Code copié !", "lightgreen");
+    gameRef = db.ref('games/' + gameIdInputVal);
+    
+    // On affiche un message de chargement.
+    showMessage(lobbyMessage, "Partie rejointe. Connexion en cours...", "lightgreen");
+
+    try {
+        // 1. On vérifie d'abord l'état de la partie.
+        const snapshot = await gameRef.once('value');
+        const gameData = snapshot.val();
+
+        if (!gameData || gameData.status !== 'waiting' || gameData.players.white) {
+            showMessage(lobbyMessage, "Partie introuvable ou déjà en cours.", "red");
+            return;
+        }
+
+        // 2. On met à jour la partie de manière "atomique" avec les informations du joueur blanc
+        // et le statut 'playing'.
+        await gameRef.update({
+            'players/white': {
+                uid: myUid,
+                email: auth.currentUser.email,
+                nickname: myNickname
+            },
+            status: 'playing'
+        });
+        
+        gameId = gameIdInputVal; // Met à jour la variable globale
+        myColor = 2; // Le joueur qui rejoint est toujours blanc
+
+        // 3. Si l'opération a réussi, le jeu peut commencer.
+        // On s'abonne aux mises à jour et on passe à l'écran de jeu.
+        gameRef.on('value', snapshot => {
+            const currentData = snapshot.val();
+            if (currentData && currentData.status === 'playing') {
+                loadGame(currentData);
+                showScreen(gameScreen);
+            }
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la jonction de la partie:", error);
+        showMessage(lobbyMessage, "Erreur lors de la jonction. Veuillez réessayer.", "red");
+    }
 };
 
 /* ========== Canvas events ========== */
