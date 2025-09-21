@@ -517,14 +517,10 @@ async function generateGameId() {
 
 createGameBtn.onclick = async () => {
     try {
-        showMessage(lobbyMessage, "Création de la partie...", "lightblue");
-        await resetGame();
-        gameId = await generateGameId();
-        myColor = 1; // black player
-        gameRef = db.ref(`games/${gameId}`);
+        const gameId = generateGameId();
+        const gameRef = db.ref('games/' + gameId);
+        const myUid = auth.currentUser.uid;
 
-        // Utilisez .set() pour créer l'objet complet en une seule fois.
-        // C'est plus direct et résout les problèmes de permission.
         await gameRef.set({
             status: "waiting",
             players: {
