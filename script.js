@@ -432,6 +432,7 @@ async function startSignaling(isCreator) {
 
 
 /* ========== Game actions ========== */
+// La version améliorée de playMove
 function playMove(x, y) {
     if (gameOver) return;
     if (myColor !== currentPlayer) {
@@ -439,21 +440,58 @@ function playMove(x, y) {
         return;
     }
     
+    // On vérifie d'abord si le coup est légal
     if (!isLegalMove(x, y, currentPlayer, board)) {
         return;
     }
 
-    const { newState: proposedBoardState } = placeStone(x, y, currentPlayer, board);
+    const proposedBoardState = copyBoard(board);
+    let capturedStones = 0;
+    const opponent = currentPlayer === 1 ? 2 : 1;
+    
+    // On place le pion sur l'état temporaire
+    proposedBoardState[y][x] = currentPlayer;
+
+    // On vérifie les captures
+    for (let [nx, ny] of getNeighbors(x, y)) {
+        if (proposedBoardState[ny][nx] === opponent) {
+            const chain = getChain(nx, ny, opponent, new Set(), proposedBoardState);
+            if (getLiberties(chain, proposedBoardState) === 0) {
+                // S'il y a une capture, on met à jour le nombre de pions capturés
+                capturedStones += chain.length;
+                chain.forEach(([cx, cy]) => (proposedBoardState[cy][cx] = 0));
+            }
+        }
+    }
+    
+    // Règle du suicide
+    const myChain = getChain(x, y, currentPlayer, new Set(), proposedBoardState);
+    if (getLiberties(myChain, proposedBoardState) === 0) {
+        showMessage(gameMessage, "Les coups suicides ne sont pas autorisés.", "orange");
+        return;
+    }
+
+    // Règle du Ko (vérification de l'historique)
+    const newStateStr = boardToString(proposedBoardState);
+    if (history.includes(newStateStr)) {
+        showMessage(gameMessage, "Violation de la règle du Superko.", "orange");
+        return;
+    }
+
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     
+    // Mise à jour de Firebase avec le nouveau tableau et le nombre de captures
     saveGameToFirebase({
         board: proposedBoardState,
         currentPlayer: nextPlayer,
-        history: [...history, boardToString(proposedBoardState)],
+        history: [...history, newStateStr],
         consecutivePasses: 0,
-        lastReason: "move"
+        lastReason: "move",
+        // Il faudrait stocker le score des captures dans la base de données
+        // Exemple : captures: { black: currentCaptures.black + (currentPlayer === 1 ? capturedStones : 0), white: ... }
     });
 }
+
 function passTurn() {
     if (gameOver) return;
     if (myColor !== currentPlayer) {
