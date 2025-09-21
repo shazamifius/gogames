@@ -7,9 +7,9 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
+  min-height: 100vh; /* MODIFICATION: Permet le défilement si le contenu dépasse */
   overflow: hidden;
-  box-sizing: border-box; /* Ensures padding and border are included in the element's total width and height */
+  box-sizing: border-box;
 }
 
 #app {
@@ -40,15 +40,11 @@ header {
 .logo {
   font-size: 1.5rem;
   margin: 0;
-  white-space: nowrap; /* Prevents text from wrapping to the next line */
 }
 
 .player-info {
   font-size: 1rem;
   color: #aaa;
-  white-space: nowrap; /* Prevents text from wrapping */
-  overflow: hidden; /* Hides any text that overflows */
-  text-overflow: ellipsis; /* Adds "..." to text that is hidden due to overflow */
 }
 
 /* Screen system */
@@ -61,7 +57,7 @@ header {
   width: 100%;
   height: 100%;
   background-color: #111;
-  padding: 20px; /* Add padding to screens for better spacing */
+  padding: 20px;
   box-sizing: border-box;
 }
 
@@ -79,8 +75,8 @@ header {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  width: 100%; /* Make auth-box responsive */
-  max-width: 400px; /* Set a max-width for larger screens */
+  width: 100%;
+  max-width: 400px;
 }
 
 .auth-box h2 {
@@ -94,12 +90,12 @@ header {
   flex-direction: column;
   align-items: center;
   gap: 15px;
-  width: 100%; /* Make options responsive */
+  width: 100%;
 }
 
 .join-game-box {
   display: flex;
-  flex-direction: column; /* Stack elements vertically on small screens */
+  flex-direction: column;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -125,8 +121,8 @@ input {
   border-radius: 5px;
   background: #222;
   color: white;
-  width: 100%; /* Make inputs responsive */
-  max-width: 250px; /* Set a max-width for larger screens */
+  width: 100%;
+  max-width: 250px;
   font-size: 1rem;
   box-sizing: border-box;
 }
@@ -147,11 +143,10 @@ button {
   cursor: pointer;
   font-size: 1rem;
   transition: background 0.2s ease-in-out, transform 0.1s ease-in-out;
-  width: 100%; /* Make buttons responsive */
-  max-width: 250px; /* Set a max-width for larger screens */
+  width: 100%;
+  max-width: 250px;
 }
 
-/* A special style for buttons in the join-game-box to adapt to the layout */
 .join-game-box button {
   max-width: 150px;
 }
@@ -175,22 +170,22 @@ button:active {
 /* Scoreboard */
 .score-container {
   display: flex;
-  flex-direction: row; /* Default: horizontal layout */
+  flex-direction: row;
   justify-content: space-around;
   align-items: center;
   width: 100%;
   margin-bottom: 20px;
-  gap: 10px; /* Add spacing between score elements */
+  gap: 10px;
 }
 
 .player-score {
-  padding: 10px; /* Reduced padding for smaller screens */
+  padding: 10px;
   background-color: rgba(30, 30, 30, 0.8);
   border-radius: 10px;
-  font-size: 1rem; /* Adjusted font size */
+  font-size: 1rem;
   min-width: auto;
   text-align: center;
-  flex-grow: 1; /* Allow elements to grow and fill available space */
+  flex-grow: 1;
 }
 
 /* Game board */
@@ -200,10 +195,11 @@ button:active {
   border: 5px solid #664e3f;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
   margin-bottom: 20px;
-  width: calc(100vw - 40px); /* Use viewport width for responsiveness, minus padding */
-  max-width: 600px; /* Keep the original max size */
-  height: auto; /* Maintain aspect ratio */
-  border-radius: 10px; /* Make it consistent with other elements */
+  width: calc(100vw - 40px);
+  max-width: 600px;
+  height: auto;
+  aspect-ratio: 1 / 1; /* Assure un ratio carré parfait */
+  border-radius: 10px;
 }
 
 /* Controls */
@@ -216,46 +212,48 @@ button:active {
 }
 
 .controls button {
-  width: auto; /* Reset width to auto for these specific buttons */
+  width: auto;
   max-width: 150px;
 }
 
 /* Responsive */
 @media (max-width: 700px) {
-  /* No changes needed here, the new code above handles it */
+  /* Pas de changement nécessaire ici, le code ci-dessus est déjà flexible */
 }
 
-/* Update the style for the link inside the logo */
 .logo a {
   color: inherit;
-  text-decoration: none; /* Removes the underline from the link */
+  text-decoration: none;
 }
 
 .logo a:hover {
-  text-decoration: none; /* Removes the underline on hover as well */
+  text-decoration: underline;
 }
 
-/* Further adjustments for very small screens (e.g., old phones) */
+/* Further adjustments for very small screens */
 @media (max-width: 480px) {
+  #app {
+    padding: 10px; /* MODIFICATION: Réduit le padding global */
+  }
+
   .score-container {
-    flex-direction: column; /* Stack score vertically */
+    flex-direction: column;
   }
 
   .player-score {
-    width: 100%; /* Full width when stacked */
+    width: 100%;
   }
 
   .join-game-box {
-    flex-direction: column; /* Stack input and button */
+    flex-direction: column;
   }
 
   .join-game-box button {
     max-width: 100%;
   }
-
-  /* Make both texts smaller on screens less than 480px wide */
-  .logo,
-  .player-info {
-    font-size: 0.8rem;
+  
+  .controls {
+    flex-direction: column; /* MODIFICATION: Empile les boutons verticalement */
+    align-items: center;
   }
 }
