@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,59 +12,59 @@
 <body>
   <div id="app">
     <header>
-        <h1 class="logo"><a href="#" id="mainPageLink">Online Go Game</a></h1>
-        <div id="playerInfo" class="player-info">Not connected</div>
-        <button id="logoutBtn" style="display:none;">Logout</button>
+      <h1 class="logo"><a href="#" id="mainPageLink">Online Go Game</a></h1>
+      <div id="playerInfo" class="player-info">Non connecté</div>
+      <button id="logoutBtn" style="display:none;">Déconnexion</button>
     </header>
 
     <div id="authScreen" class="screen active">
       <div class="auth-box">
-        <h2>Login / Register</h2>
+        <h2>Connexion / Inscription</h2>
         <input type="email" id="emailInput" placeholder="Email">
-        <input type="password" id="passwordInput" placeholder="Password">
-        <button id="loginBtn">Login</button>
-        <button id="registerBtn">Register</button>
+        <input type="password" id="passwordInput" placeholder="Mot de passe">
+        <button id="loginBtn">Connexion</button>
+        <button id="registerBtn">Inscription</button>
       </div>
       <p id="authMessage" class="message"></p>
     </div>
 
     <div id="nicknameScreen" class="screen">
       <div class="auth-box">
-        <h2>Choose a Nickname</h2>
-        <input type="text" id="nicknameInput" placeholder="Your nickname">
-        <button id="saveNicknameBtn">Save</button>
+        <h2>Choisissez un pseudo</h2>
+        <input type="text" id="nicknameInput" placeholder="Votre pseudo">
+        <button id="saveNicknameBtn">Sauvegarder</button>
       </div>
       <p id="nicknameMessage" class="message"></p>
     </div>
 
     <div id="lobbyScreen" class="screen">
-      <h2>Welcome!</h2>
+      <h2>Bienvenue !</h2>
       <div class="lobby-options">
-        <button id="createGameBtn">Create Game</button>
+        <button id="createGameBtn">Créer une partie</button>
         <div class="join-game-box">
-          <input type="text" id="gameIdInput" placeholder="Enter game ID">
-          <button id="joinGameBtn">Join Game</button>
+          <input type="text" id="gameIdInput" placeholder="Entrez un code de 4 chiffres">
+          <button id="joinGameBtn">Rejoindre</button>
         </div>
       </div>
       <div id="gameLinkSection" class="game-info" style="display:none;">
-        <p>Share this link with your friend:</p>
+        <p>Partagez ce code avec votre ami :</p>
         <p id="gameLinkDisplay"></p>
-        <button id="copyLinkBtn">Copy Link</button>
+        <button id="copyLinkBtn">Copier le code</button>
       </div>
       <p id="lobbyMessage" class="message"></p>
     </div>
 
     <div id="gameScreen" class="screen">
       <div class="score-container">
-        <div id="blackScore" class="player-score">Black: 0</div>
-        <div id="whiteScore" class="player-score">White: 7.5</div>
+        <div id="blackScore" class="player-score">Noir: 0</div>
+        <div id="whiteScore" class="player-score">Blanc: 0</div>
       </div>
       <canvas id="goBoard" width="600" height="600"></canvas>
+      <p id="gameStatus" class="message"></p>
       <div class="controls">
-        <button id="passButton">Pass</button>
-        <button id="forfeitButton">Resign</button>
+        <button id="passButton">Passer</button>
+        <button id="forfeitButton">Abandonner</button>
       </div>
-      <p id="gameMessage" class="message"></p>
     </div>
   </div>
 

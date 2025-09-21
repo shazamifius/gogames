@@ -559,7 +559,7 @@ async function generateGameId() {
     }
     return newId.toString();
 }
-/* ... (tout le reste de ton script) ... */
+
 
 // Assure-toi que cette partie est bien à la fin du fichier script.js
 createGameBtn.onclick = async () => {
@@ -680,12 +680,20 @@ mainPageLink.onclick = () => { resetGame(); showScreen(lobbyScreen); };
 /* ========== Incoming firebase updates listener (global fallback) ========== */
 /* Note: created per-game when gameRef is set (see create/join code) */
 
+// Événement pour le nettoyage lorsque l'utilisateur quitte la page
+window.addEventListener('beforeunload', (event) => {
+    if (gameRef && myColor) {
+        const disconnectedData = { status: 'disconnected', byPlayer: myColor === 1 ? 'black' : 'white' };
+        gameRef.child('status').set('disconnected').catch(e => console.error("Erreur de statut de déconnexion:", e));
+    }
+    resetGame();
+});
+
 /* ========== Init ========== */
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const gameIdFromUrl = urlParams.get('gameId');
     if (gameIdFromUrl) {
-        // show join input (if you have a dedicated section; if not this is harmless)
         try { document.getElementById("joinGameSection").style.display = "flex"; } catch(e){}
         gameIdInput.value = gameIdFromUrl;
     }
