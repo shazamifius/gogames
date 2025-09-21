@@ -522,25 +522,29 @@ createGameBtn.onclick = async () => {
         gameId = await generateGameId();
         myColor = 1; // black player
         gameRef = db.ref(`games/${gameId}`);
-        await gameRef.set({
+
+        // Étape 1 : Créer la partie avec le joueur noir
+        await gameRef.child('players/black').set({
+            uid: myUid,
+            email: auth.currentUser.email,
+            nickname: myNickname
+        });
+
+        // Étape 2 : Mettre à jour les autres données de la partie
+        await gameRef.update({
             status: "waiting",
-            players: {
-                black: {
-                    uid: myUid,
-                    email: auth.currentUser.email,
-                    nickname: myNickname
-                }
-            },
             board: board,
             currentPlayer: currentPlayer,
             history: history,
             createdAt: Date.now(),
             expiresAt: Date.now() + 2 * 60 * 60 * 1000
         });
+
         gameLinkSection.style.display = "block";
         gameLinkDisplay.textContent = gameId;
         copyLinkBtn.textContent = "Copier le code";
         showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partage-le avec ton adversaire.`, "lightgreen");
+
         const whiteRef = gameRef.child("players/white");
         whiteRef.on("value", snap => {
             if (snap.val() && !peerConnection) {
