@@ -549,11 +549,9 @@ auth.onAuthStateChanged(async user => {
 async function generateGameId() {
     let newId, isUnique = false;
     while (!isUnique) {
-        newId = Math.floor(1000 + Math.random() * 9000);
+        newId = Math.floor(100000 + Math.random() * 900000);
         const snapshot = await db.ref(`games/${newId}`).once('value');
-        if (!snapshot.exists()) {
-            isUnique = true;
-        }
+        if (!snapshot.exists()) isUnique = true;
     }
     return newId.toString();
 }
@@ -680,24 +678,10 @@ async function resetIfAny() {
 /* ========== Canvas events ========== */
 canvas.addEventListener("click", e => {
     if (gameOver) return;
-
     const rect = canvas.getBoundingClientRect();
-
-    // Calcule le ratio d'échelle
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    // Calcule les coordonnées du clic SUR LE CANVAS (et non sur la page)
-    const canvasX = (e.clientX - rect.left) * scaleX;
-    const canvasY = (e.clientY - rect.top) * scaleY;
-
-    // Trouve la position sur la grille en se basant sur les nouvelles coordonnées
-    const x = Math.round(canvasX / CELL_SIZE) - 1;
-    const y = Math.round(canvasY / CELL_SIZE) - 1;
-
-    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-        playMove(x, y);
-    }
+    const x = Math.round((e.clientX - rect.left) / CELL_SIZE) - 1;
+    const y = Math.round((e.clientY - rect.top) / CELL_SIZE) - 1;
+    if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) playMove(x, y);
 });
 passButton.onclick = passTurn;
 forfeitButton.onclick = resign;
