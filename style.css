@@ -1,6 +1,6 @@
 /* ========================================= */
-/* Online Go Game - Style amélioré          */
-/* Thème : Bois & élégance                  */
+/* Online Go Game - Style final             */
+/* Basé sur le style original avec ajouts   */
 /* ========================================= */
 
 /* ========== Couleurs & Typographie ========== */
@@ -63,10 +63,17 @@ header {
   align-items: center;
   justify-content: center;
   flex-direction: column;
+  /* Animation ajoutée pour une transition en douceur */
+  animation: fadeIn 0.8s ease-in-out;
 }
 
 .screen.active {
   display: flex;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 h2 {
@@ -102,7 +109,8 @@ h2 {
   color: var(--color-text-dark);
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.3s, transform 0.1s;
+  /* Transitions améliorées pour un effet plus doux */
+  transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
@@ -110,6 +118,11 @@ h2 {
   background-color: var(--color-accent);
   transform: translateY(-2px);
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.5);
+}
+
+.auth-box button:active, button:active, .controls button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 #logoutBtn {
@@ -166,9 +179,7 @@ h2 {
   font-weight: bold;
 }
 
-/* ======================================== */
-/* Nouveaux styles pour les scores         */
-/* ======================================== */
+/* ========== Nouveaux styles pour les scores ========== */
 .score-container {
   display: flex;
   justify-content: center;
@@ -191,9 +202,7 @@ h2 {
   text-align: center;
 }
 
-/* ======================================== */
-/* Plateau de jeu et contrôles             */
-/* ======================================== */
+/* ========== Plateau de jeu et contrôles ========== */
 #goBoard {
   margin-bottom: 20px;
   width: calc(100vw - 40px);
@@ -201,9 +210,7 @@ h2 {
   height: auto;
   border-radius: 10px;
   background-color: var(--color-primary);
-  /* L'ombre intérieure est conservée pour donner un aspect de profondeur */
-  box-shadow:
-    inset 0 0 50px rgba(121, 74, 53, 0.74);
+  box-shadow: inset 0 0 50px rgba(121, 74, 53, 0.74);
 }
 
 .controls {
@@ -220,7 +227,69 @@ h2 {
   max-width: 150px;
 }
 
-/* ========== Responsive Design (pour les téléphones) ========== */
+/* ========== Fin de partie (overlay) ========== */
+.end-game-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.end-game-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.end-game-message-container {
+    padding: 30px;
+    background-color: var(--color-dark);
+    border: 2px solid var(--color-primary);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    transform: scale(0.8);
+    transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+.end-game-overlay.active .end-game-message-container {
+    transform: scale(1);
+}
+
+.end-game-message {
+    font-size: 2.5rem;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.end-game-countdown {
+    margin-top: 10px;
+    font-size: 1.2rem;
+    color: var(--color-text-light);
+}
+
+/* Animation de pulsation */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.pulsing .end-game-message-container {
+    animation: pulse 1s infinite;
+}
+
+/* ========== Responsive Design ========== */
 @media (max-width: 600px) {
   .score-container {
     flex-direction: column;
