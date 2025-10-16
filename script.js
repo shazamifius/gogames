@@ -340,12 +340,12 @@ function resign() {
 
 
 
-function animateWin(winnerNickname, message, isWinner) {
+function animateWin(winnerNickname, message) {
     endGameOverlay.classList.add("active");
     endGameMessageEl.textContent = message || `${winnerNickname} a gagné !`;
 
     // Démarre l'animation de confettis uniquement pour le gagnant
-    if (isWinner) {
+    if (winnerNickname && myNickname === winnerNickname) {
         const duration = 5 * 1000;
         const end = Date.now() + duration;
 
@@ -427,10 +427,8 @@ async function endGame(message) {
             }
         }
 
-        const isWinner = myNickname === winnerNickname;
-
         // Lance l’animation avec le message final déterminé
-        animateWin(winnerNickname, finalMessage, isWinner);
+        animateWin(winnerNickname, finalMessage);
 
         // Désactive les boutons de jeu
         passButton.disabled = true;
