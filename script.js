@@ -313,7 +313,7 @@ function passTurn() {
             lastReason: message,
             status: "finished"
         });
-        endGame(message); // Animation + calcul des scores
+        // L'écouteur Firebase se chargera de terminer la partie pour les deux joueurs.
     } else {
         saveGameToFirebase({
             currentPlayer: nextPlayer,
@@ -340,35 +340,48 @@ function resign() {
 
 
 
-function animateWin(winnerNickname, message) {
+function animateWin(winnerNickname, message, isWinner) {
     endGameOverlay.classList.add("active");
     endGameMessageEl.textContent = message || `${winnerNickname} a gagné !`;
-    endGameOverlay.classList.add("pulsing");
 
-    // Change le message du compte à rebours pour un retour au menu
-    endGameCountdownEl.textContent = `Retour au menu dans 5 secondes...`;
+    // Démarre l'animation de confettis uniquement pour le gagnant
+    if (isWinner) {
+        const duration = 5 * 1000;
+        const end = Date.now() + duration;
+
+        (function frame() {
+            confetti({
+                particleCount: 2,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0 },
+            });
+            confetti({
+                particleCount: 2,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1 },
+            });
+
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        }());
+    }
 
     let countdown = 5;
+    endGameCountdownEl.textContent = `Retour au menu dans ${countdown} secondes...`;
+
     const countdownInterval = setInterval(() => {
         countdown--;
         if (countdown > 0) {
             endGameCountdownEl.textContent = `Retour au menu dans ${countdown} secondes...`;
         } else {
             clearInterval(countdownInterval);
-            endGameOverlay.classList.remove("pulsing");
-            endGameOverlay.style.opacity = '0';
-
-            // Ramène au lobby après la fin de l'animation
-            setTimeout(() => {
-                endGameOverlay.classList.remove("active");
-                endGameOverlay.style.opacity = '1'; // Réinitialise l'opacité pour la prochaine fois
-
-                // On réinitialise l'état du jeu et on affiche le lobby
-                resetGame();
-                showScreen(lobbyScreen);
-                showMessage(lobbyMessage, "La partie est terminée.", "green");
-
-            }, 500);
+            endGameOverlay.classList.remove("active");
+            resetGame();
+            showScreen(lobbyScreen);
+            showMessage(lobbyMessage, "La partie est terminée.", "green");
         }
     }, 1000);
 }
@@ -414,8 +427,10 @@ async function endGame(message) {
             }
         }
 
+        const isWinner = myNickname === winnerNickname;
+
         // Lance l’animation avec le message final déterminé
-        animateWin(winnerNickname, finalMessage);
+        animateWin(winnerNickname, finalMessage, isWinner);
 
         // Désactive les boutons de jeu
         passButton.disabled = true;
@@ -643,7 +658,6 @@ function setupGameListener() {
              showMessage(gameMessage, "Un adversaire a rejoint ! La partie commence.", "lightgreen");
         }
         if (gameData.status === "finished" && !gameOver) {
-            gameOver = true;
             endGame(gameData.lastReason || "La partie est terminée.");
         }
         if (gameData.status === "playing") {
