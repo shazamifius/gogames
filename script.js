@@ -451,10 +451,10 @@ async function saveGameToFirebase(dataToUpdate) {
     if (!gameRef || !gameId) return;
     try {
         await gameRef.update({
-            ...dataToUpdate,
             lastUpdateBy: myUid || "unknown",
             lastUpdateAt: Date.now(),
-            status: gameOver ? "finished" : "playing"
+            status: gameOver ? "finished" : "playing",
+            ...dataToUpdate
         });
     } catch (err) {
         console.error("Erreur de sauvegarde Firebase:", err);
