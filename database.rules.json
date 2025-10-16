@@ -1,0 +1,34 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['email', 'nickname']) && newData.child('nickname').isString() && newData.child('nickname').val().length() >= 3"
+      }
+    },
+    "games": {
+      ".read": true,
+      "$gameId": {
+        // La validation des données est importante pour la sécurité
+        ".validate": "newData.hasChildren(['status', 'players', 'board', 'currentPlayer', 'createdAt'])",
+
+        ".write":
+          // Condition 1: Créer une partie
+          "newData.exists() && !data.exists() && auth != null && newData.child('players/black/uid').val() === auth.uid && newData.child('status').val() === 'waiting'" ||
+
+          // Condition 2: Rejoindre une partie
+          "data.exists() && newData.exists() && auth != null && data.child('status').val() === 'waiting' && !data.child('players').hasChild('white') && newData.child('players/white/uid').val() === auth.uid && newData.child('status').val() === 'playing'" ||
+
+          // Condition 3: Jouer un coup ou passer son tour
+          "data.exists() && newData.exists() && auth != null && data.child('status').val() === 'playing' && ( (data.child('currentPlayer').val() === 1 && data.child('players/black/uid').val() === auth.uid) || (data.child('currentPlayer').val() === 2 && data.child('players/white/uid').val() === auth.uid) )" ||
+
+          // Condition 4: Finir la partie (par abandon ou 2 passes)
+          "data.exists() && newData.exists() && auth != null && data.child('status').val() === 'playing' && newData.child('status').val() === 'finished' && (data.child('players/black/uid').val() === auth.uid || data.child('players/white/uid').val() === auth.uid)" ||
+
+          // Condition 5: Supprimer une vieille partie
+          "!newData.exists() && data.child('createdAt').val() < (now - 172800000)" // 48 heures en millisecondes
+      }
+    }
+  }
+}

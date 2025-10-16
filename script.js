@@ -1,6 +1,6 @@
 /* =================================
    Online Go Game - script.js
-   
+
    Version nettoyée et organisée.
    Toutes les fonctionnalités ont été conservées.
 ================================= */
@@ -344,23 +344,35 @@ function animateWin(winnerNickname, message) {
     endGameOverlay.classList.add("active");
     endGameMessageEl.textContent = message || `${winnerNickname} a gagné !`;
     endGameOverlay.classList.add("pulsing");
+
+    // Change le message du compte à rebours pour un retour au menu
+    endGameCountdownEl.textContent = `Retour au menu dans 5 secondes...`;
+
     let countdown = 5;
-    endGameCountdownEl.textContent = `La partie sera supprimée dans ${countdown} secondes...`;
     const countdownInterval = setInterval(() => {
         countdown--;
         if (countdown > 0) {
-            endGameCountdownEl.textContent = `La partie sera supprimée dans ${countdown} secondes...`;
+            endGameCountdownEl.textContent = `Retour au menu dans ${countdown} secondes...`;
         } else {
             clearInterval(countdownInterval);
             endGameOverlay.classList.remove("pulsing");
             endGameOverlay.style.opacity = '0';
+
+            // Ramène au lobby après la fin de l'animation
             setTimeout(() => {
                 endGameOverlay.classList.remove("active");
-                endGameOverlay.style.opacity = '1';
+                endGameOverlay.style.opacity = '1'; // Réinitialise l'opacité pour la prochaine fois
+
+                // On réinitialise l'état du jeu et on affiche le lobby
+                resetGame();
+                showScreen(lobbyScreen);
+                showMessage(lobbyMessage, "La partie est terminée.", "green");
+
             }, 500);
         }
     }, 1000);
 }
+
 async function endGame(message) {
     if (gameOver) return;
     gameOver = true;
@@ -368,56 +380,53 @@ async function endGame(message) {
     try {
         const snapshot = await gameRef.once("value");
         const gameData = snapshot.val();
-        if (!gameData || !gameData.players) return;
+
+        if (!gameData || !gameData.players) {
+            resetGame();
+            showScreen(lobbyScreen);
+            return;
+        }
 
         const blackNickname = gameData.players.black.nickname || "Joueur Noir";
         const whiteNickname = gameData.players.white.nickname || "Joueur Blanc";
 
         let winnerNickname = "";
-        let finalMessage = message;
+        let finalMessage = "";
 
-        // Cas d’abandon (message déjà passé)
-        if (message.includes("gagne par abandon")) {
-            winnerNickname = message.includes("Noir") ? blackNickname : whiteNickname;
-        } 
-        // Cas normal → calcul des scores
-        else {
+        // Logique de détermination du message final plus robuste
+        if (message && message.includes("gagne par abandon")) {
+            // Cas 1: Un joueur a abandonné
+            winnerNickname = message.includes("Blanc") ? whiteNickname : blackNickname;
+            finalMessage = message; // Le message est déjà complet (ex: "Le joueur Blanc gagne par abandon.")
+
+        } else {
+            // Cas 2: Double passe, blocage, ou autre fin par score
             const { black, white } = computeScore(board);
+
             if (black > white) {
                 winnerNickname = blackNickname;
-                finalMessage = `${blackNickname} gagne avec ${(black - white).toFixed(1)} points d'avance !`;
+                finalMessage = `${winnerNickname} gagne avec ${(black - white).toFixed(1)} points d'avance !`;
             } else if (white > black) {
                 winnerNickname = whiteNickname;
-                finalMessage = `${whiteNickname} gagne avec ${(white - black).toFixed(1)} points d'avance !`;
+                finalMessage = `${winnerNickname} gagne avec ${(white - black).toFixed(1)} points d'avance !`;
             } else {
                 finalMessage = "La partie est nulle !";
             }
         }
 
-        // Lance l’animation
+        // Lance l’animation avec le message final déterminé
         animateWin(winnerNickname, finalMessage);
 
-        // Désactive les boutons
+        // Désactive les boutons de jeu
         passButton.disabled = true;
         forfeitButton.disabled = true;
 
-        // 🔥 Suppression automatique après 5 secondes (des 2 côtés)
-        setTimeout(async () => {
-            if (gameRef) {
-                try {
-                    await gameRef.remove();
-                    console.log(`Partie ${gameId} supprimée.`);
-                    resetGame();
-                    showScreen(lobbyScreen);
-                    showMessage(lobbyMessage, "La partie est terminée et a été supprimée.", "green");
-                } catch (err) {
-                    console.error("Erreur de suppression de la partie:", err);
-                }
-            }
-        }, 5000);
-
     } catch (err) {
         console.error("Erreur dans endGame:", err);
+        // En cas d'erreur, on ramène simplement au lobby
+        resetGame();
+        showScreen(lobbyScreen);
+        showMessage(lobbyMessage, "Une erreur est survenue lors de la fin de partie.", "red");
     }
 }
 
