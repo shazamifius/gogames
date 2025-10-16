@@ -459,7 +459,7 @@ async function generateGameId() {
 async function cleanUpOldGames() {
     const gamesRef = db.ref('games');
     const now = Date.now();
-    const fortyTwoHoursInMs = 48 * 60 * 60 * 1000;
+    const fortyEightHoursInMs = 48 * 60 * 60 * 1000; // 48 heures
 
     try {
         const snapshot = await gamesRef.once('value');
@@ -471,20 +471,26 @@ async function cleanUpOldGames() {
                 const game = games[gameId];
                 const lastActivity = game.lastUpdateAt || game.createdAt;
 
-                if (lastActivity && (now - lastActivity > fortyTwoHoursInMs)) {
-                    // 🔥 suppression directe
-                    await db.ref(`games/${gameId}`).remove();
-                    console.log(`Partie ${gameId} supprimée (plus de 42h).`);
-                    gamesDeletedCount++;
+                // La règle de sécurité est la source de vérité, mais on filtre ici pour l'affichage
+                if (lastActivity && (now - lastActivity > fortyEightHoursInMs)) {
+                    try {
+                        await db.ref(`games/${gameId}`).remove();
+                        console.log(`Partie ${gameId} supprimée (plus de 48h d'inactivité).`);
+                        gamesDeletedCount++;
+                    } catch (err) {
+                        // Le client peut échouer si la règle de sécurité est plus stricte
+                        // Ce n'est pas une erreur critique, juste une tentative de nettoyage
+                        console.warn(`Nettoyage de la partie ${gameId} bloqué par les règles de sécurité (ce qui est normal si elle est active).`);
+                    }
                 }
             }
 
             if (gamesDeletedCount > 0) {
-                console.log(`${gamesDeletedCount} parties anciennes supprimées.`);
+                console.log(`${gamesDeletedCount} vieilles parties ont été nettoyées.`);
             }
         }
     } catch (error) {
-        console.error("Erreur lors du nettoyage des parties:", error);
+        console.error("Erreur lors du nettoyage des vieilles parties:", error);
     }
 }
 
