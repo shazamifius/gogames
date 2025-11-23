@@ -70,6 +70,7 @@ let gameOver = false;
 let gameRef = null;
 let hoverPoint = null;
 let gameListener = null;
+let moveInProgress = false;
 
 /* ========== WebRTC - Conservé pour l'initialisation ========== */
 let peerConnection = null;
@@ -275,9 +276,10 @@ function placeStone(x, y, color, state) {
     return { newState };
 }
 function playMove(x, y) {
-    if (gameOver) return;
+    if (gameOver || moveInProgress) return;
     if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
     if (!isLegalMove(x, y, currentPlayer, board)) return;
+    moveInProgress = true;
     const proposedBoardState = copyBoard(board);
     let capturedStones = 0;
     const opponent = currentPlayer === 1 ? 2 : 1;
@@ -301,8 +303,9 @@ function playMove(x, y) {
     });
 }
 function passTurn() {
-    if (gameOver) return;
+    if (gameOver || moveInProgress) return;
     if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
+    moveInProgress = true;
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     const nextPasses = consecutivePasses + 1;
 
@@ -324,7 +327,8 @@ function passTurn() {
 }
 
 function resign() {
-    if (gameOver || !gameRef) return;
+    if (gameOver || !gameRef || moveInProgress) return;
+    moveInProgress = true;
 
     // L'autre joueur gagne
     const winner = myColor === 1 ? "Blanc" : "Noir";
@@ -456,6 +460,7 @@ async function saveGameToFirebase(dataToUpdate) {
         });
     } catch (err) {
         console.error("Erreur de sauvegarde Firebase:", err);
+        moveInProgress = false;
     }
 }
 async function generateGameId() {
@@ -638,6 +643,7 @@ function setupGameListener() {
         gameRef.off("value", gameListener);
     }
     gameListener = gameRef.on('value', snapshot => {
+        moveInProgress = false;
         const gameData = snapshot.val();
         if (!gameData) {
             resetGame();
