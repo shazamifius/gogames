@@ -1,8 +1,6 @@
 /* =================================
    Online Go Game - script.js
-
-   Version nettoyée et organisée.
-   Toutes les fonctionnalités ont été conservées.
+   Version avec Matchmaking, Spectateur et Tailles dynamiques
 ================================= */
 
 /* ========== Firebase config & initialisation ========== */
@@ -16,7 +14,9 @@ const firebaseConfig = {
     appId: "1:489232590919:web:ecc32c7aeeaffe7e9e2962",
     measurementId: "G-Q7XJMBB0WK"
 };
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.database();
 const auth = firebase.auth();
 
@@ -54,14 +54,23 @@ const endGameOverlay = document.getElementById("endGameOverlay");
 const endGameMessageEl = document.getElementById("endGameMessage");
 const endGameCountdownEl = document.getElementById("endGameCountdown");
 
+const boardSizeSelect = document.getElementById("boardSizeSelect");
+const publicGameCheckbox = document.getElementById("publicGameCheckbox");
+const waitingGamesList = document.getElementById("waitingGamesList");
+const activeGamesList = document.getElementById("activeGamesList");
+const refreshListBtn = document.getElementById("refreshListBtn");
+const publicGameNote = document.getElementById("publicGameNote");
+
+
 /* ========== Variables d'état & Constantes ========== */
-const BOARD_SIZE = 19;
+let BOARD_SIZE = 19; // Valeur par défaut, sera mise à jour dynamiquement
 const KOMI = 7.5;
-const CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
-let board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+let CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
+
+let board = [];
 let history = [];
 let currentPlayer = 1; // 1: black, 2: white
-let myColor = null;
+let myColor = null; // 1: black, 2: white, 0: spectator
 let myUid = null;
 let myNickname = null;
 let gameId = null;
@@ -153,6 +162,9 @@ async function startSignaling(isCreator) {
 function showScreen(screen) {
     [authScreen, nicknameScreen, lobbyScreen, gameScreen].forEach(s => s.classList.remove("active"));
     screen.classList.add("active");
+    if (screen === lobbyScreen) {
+        fetchPublicGames(); // Rafraîchir la liste en arrivant sur le lobby
+    }
 }
 function showMessage(el, text, color = "#bbb") {
     el.innerText = text;
@@ -166,6 +178,14 @@ function copyToClipboard(text) {
             showMessage(lobbyMessage, "Impossible de copier. Veuillez le faire manuellement.", "orange");
         });
 }
+
+// Mise à jour de la taille du plateau et des cellules
+function updateBoardSize(size) {
+    BOARD_SIZE = parseInt(size);
+    CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
+    board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+}
+
 function getNeighbors(x, y) {
     return [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].filter(([nx, ny]) => nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE);
 }
@@ -244,66 +264,84 @@ function canPlay(playerColor, boardState) {
     }
     return false;
 }
-function isLegalMove(x, y, color, state) {
-    if (state[y][x] !== 0) { showMessage(gameMessage, "Cette case est déjà prise.", "orange"); return false; }
-    const newState = copyBoard(state);
-    newState[y][x] = color;
-    const opponent = color === 1 ? 2 : 1;
-    for (let [nx, ny] of getNeighbors(x, y)) {
-        if (newState[ny][nx] === opponent) {
-            const chain = getChain(nx, ny, opponent, new Set(), newState);
-            if (getLiberties(chain, newState) === 0) chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
-        }
-    }
-    const myChain = getChain(x, y, color, new Set(), newState);
-    if (getLiberties(myChain, newState) === 0) { showMessage(gameMessage, "Les coups suicides ne sont pas autorisés.", "orange"); return false; }
-    const newStateStr = boardToString(newState);
-    if (history.includes(newStateStr)) { showMessage(gameMessage, "Violation de la règle du Superko.", "orange"); return false; }
-    return true;
-}
+
+// Fonction utilitaire pour simuler un coup et obtenir le nouvel état
 function placeStone(x, y, color, state) {
     const newState = copyBoard(state);
     newState[y][x] = color;
     const opponent = color === 1 ? 2 : 1;
+    let capturedStones = 0;
+
     for (let [nx, ny] of getNeighbors(x, y)) {
         if (newState[ny][nx] === opponent) {
             const chain = getChain(nx, ny, opponent, new Set(), newState);
-            if (getLiberties(chain, newState) === 0) chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
-        }
-    }
-    const chain = getChain(x, y, color, new Set(), newState);
-    if (getLiberties(chain, newState) === 0) return null;
-    return { newState };
-}
-function playMove(x, y) {
-    if (gameOver || moveInProgress) return;
-    if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
-    if (!isLegalMove(x, y, currentPlayer, board)) return;
-    moveInProgress = true;
-    const proposedBoardState = copyBoard(board);
-    let capturedStones = 0;
-    const opponent = currentPlayer === 1 ? 2 : 1;
-    proposedBoardState[y][x] = currentPlayer;
-    for (let [nx, ny] of getNeighbors(x, y)) {
-        if (proposedBoardState[ny][nx] === opponent) {
-            const chain = getChain(nx, ny, opponent, new Set(), proposedBoardState);
-            if (getLiberties(chain, proposedBoardState) === 0) {
+            if (getLiberties(chain, newState) === 0) {
                 capturedStones += chain.length;
-                chain.forEach(([cx, cy]) => (proposedBoardState[cy][cx] = 0));
+                chain.forEach(([cx, cy]) => (newState[cy][cx] = 0));
             }
         }
     }
+
+    // Vérification suicide
+    const myChain = getChain(x, y, color, new Set(), newState);
+    if (getLiberties(myChain, newState) === 0) {
+         return { error: "suicide" };
+    }
+
+    return { newState, capturedStones };
+}
+
+function isLegalMove(x, y, color, state) {
+    if (state[y][x] !== 0) { showMessage(gameMessage, "Cette case est déjà prise.", "orange"); return false; }
+
+    const result = placeStone(x, y, color, state);
+    if (result.error === "suicide") {
+        showMessage(gameMessage, "Les coups suicides ne sont pas autorisés.", "orange");
+        return false;
+    }
+
+    const newStateStr = boardToString(result.newState);
+    if (history.includes(newStateStr)) { showMessage(gameMessage, "Violation de la règle du Superko.", "orange"); return false; }
+
+    return true;
+}
+
+function playMove(x, y) {
+    if (gameOver || moveInProgress) return;
+    if (myColor === 0) { showMessage(gameMessage, "Mode Spectateur : Vous ne pouvez pas jouer.", "orange"); return; }
+    if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
+
+    // On vérifie d'abord la légalité
+    if (board[y][x] !== 0) { showMessage(gameMessage, "Cette case est déjà prise.", "orange"); return; }
+
+    const result = placeStone(x, y, currentPlayer, board);
+    if (result.error === "suicide") {
+        showMessage(gameMessage, "Les coups suicides ne sont pas autorisés.", "orange");
+        return;
+    }
+
+    const newStateStr = boardToString(result.newState);
+    if (history.includes(newStateStr)) {
+        showMessage(gameMessage, "Violation de la règle du Superko.", "orange");
+        return;
+    }
+
+    // Si on arrive ici, le coup est valide
+    moveInProgress = true;
+
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     saveGameToFirebase({
-        board: proposedBoardState,
+        board: result.newState,
         currentPlayer: nextPlayer,
-        history: [...history, boardToString(proposedBoardState)],
+        history: [...history, newStateStr],
         consecutivePasses: 0,
         lastReason: "move"
     });
 }
+
 function passTurn() {
     if (gameOver || moveInProgress) return;
+    if (myColor === 0) return; // Spectator
     if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
     moveInProgress = true;
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
@@ -316,7 +354,6 @@ function passTurn() {
             lastReason: message,
             status: "finished"
         });
-        // L'écouteur Firebase se chargera de terminer la partie pour les deux joueurs.
     } else {
         saveGameToFirebase({
             currentPlayer: nextPlayer,
@@ -328,13 +365,13 @@ function passTurn() {
 
 function resign() {
     if (gameOver || !gameRef || moveInProgress) return;
+    if (myColor === 0) return; // Spectator
     moveInProgress = true;
 
     // L'autre joueur gagne
     const winner = myColor === 1 ? "Blanc" : "Noir";
     const message = `Le joueur ${winner} gagne par abandon.`;
 
-    // On enregistre en DB, et le listener déclenchera endGame() des deux côtés
     saveGameToFirebase({
         gameOver: true,
         lastReason: message,
@@ -404,8 +441,8 @@ async function endGame(message) {
             return;
         }
 
-        const blackNickname = gameData.players.black.nickname || "Joueur Noir";
-        const whiteNickname = gameData.players.white.nickname || "Joueur Blanc";
+        const blackNickname = gameData.players.black ? gameData.players.black.nickname : "Joueur Noir";
+        const whiteNickname = gameData.players.white ? gameData.players.white.nickname : "Joueur Blanc";
 
         let winnerNickname = "";
         let finalMessage = "";
@@ -528,8 +565,13 @@ function drawGrid() {
         ctx.lineTo(BOARD_SIZE * CELL_SIZE, i * CELL_SIZE);
         ctx.stroke();
     }
-    const star = [3, 9, 15];
-    star.forEach(x => star.forEach(y => {
+    // Etoiles (Hoshi) adaptatives selon la taille
+    let starPoints = [];
+    if (BOARD_SIZE === 19) starPoints = [3, 9, 15];
+    else if (BOARD_SIZE === 13) starPoints = [3, 6, 9];
+    else if (BOARD_SIZE === 9) starPoints = [2, 4, 6];
+
+    starPoints.forEach(x => starPoints.forEach(y => {
         ctx.beginPath();
         ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
         ctx.fillStyle = "#000";
@@ -586,7 +628,7 @@ function renderBoard() {
     drawHoverPoint();
 }
 function updateHoverPoint(e) {
-    if (gameOver || myColor !== currentPlayer) {
+    if (gameOver || myColor !== currentPlayer || myColor === 0) {
         hoverPoint = null;
         renderBoard();
         return;
@@ -622,7 +664,7 @@ function resetGame() {
     if (peerConnection) try { peerConnection.close(); } catch (e) { }
     dataChannel = null;
     peerConnection = null;
-    board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+    updateBoardSize(BOARD_SIZE); // Reset board
     history = [];
     currentPlayer = 1;
     myColor = null;
@@ -651,6 +693,12 @@ function setupGameListener() {
             showMessage(lobbyMessage, "La partie a été supprimée.", "red");
             return;
         }
+
+        // Mise à jour de la taille du plateau si nécessaire
+        if (gameData.boardSize && gameData.boardSize !== BOARD_SIZE) {
+             updateBoardSize(gameData.boardSize);
+        }
+
         board = gameData.board || board;
         currentPlayer = gameData.currentPlayer || currentPlayer;
         history = gameData.history || [];
@@ -677,11 +725,24 @@ function setupGameListener() {
             }
 
         }
-        if (gameData.status === 'waiting') {
-             showMessage(gameMessage, "En attente d'un adversaire...", "lightblue");
-        } else if (!gameOver) {
-             const currentPlayerNickname = (currentPlayer === 1 && gameData.players.black) ? gameData.players.black.nickname : (currentPlayer === 2 && gameData.players.white) ? gameData.players.white.nickname : '';
-             showMessage(gameMessage, `C'est au tour de ${currentPlayerNickname}.`, "lightgreen");
+
+        // Affichage des statuts
+        if (myColor === 0) {
+             // Mode Spectateur
+             passButton.disabled = true;
+             forfeitButton.disabled = true;
+             showMessage(gameMessage, `Mode Spectateur. Tour : ${currentPlayer === 1 ? "Noir" : "Blanc"}.`, "lightblue");
+        } else {
+            // Mode Joueur
+            passButton.disabled = false;
+            forfeitButton.disabled = false;
+
+            if (gameData.status === 'waiting') {
+                 showMessage(gameMessage, "En attente d'un adversaire...", "lightblue");
+            } else if (!gameOver) {
+                 const currentPlayerNickname = (currentPlayer === 1 && gameData.players.black) ? gameData.players.black.nickname : (currentPlayer === 2 && gameData.players.white) ? gameData.players.white.nickname : '';
+                 showMessage(gameMessage, `C'est au tour de ${currentPlayerNickname}.`, "lightgreen");
+            }
         }
     });
 }
@@ -711,6 +772,7 @@ function init() {
     renderBoard();
     updateScore();
     cleanUpOldGames();
+    fetchPublicGames();
 }
 
 /* ========== Fonctions d'authentification et de lobby ========== */
@@ -756,11 +818,19 @@ auth.onAuthStateChanged(async user => {
         showScreen(authScreen);
     }
 });
+
+/* ========== Création de partie ========== */
 createGameBtn.onclick = async () => {
     try {
         gameId = await generateGameId();
         gameRef = db.ref('games/' + gameId);
         if (!auth.currentUser) { showMessage(lobbyMessage, "Vous devez être connecté pour créer une partie.", "red"); return; }
+
+        const selectedSize = parseInt(boardSizeSelect.value);
+        updateBoardSize(selectedSize);
+
+        const isPublic = publicGameCheckbox.checked;
+
         const gameData = {
             status: "waiting",
             players: { black: { uid: myUid, email: auth.currentUser.email, nickname: myNickname } },
@@ -769,13 +839,22 @@ createGameBtn.onclick = async () => {
             history: history,
             createdAt: Date.now(),
             expiresAt: Date.now() + 2 * 60 * 60 * 1000,
-            consecutivePasses: 0
+            consecutivePasses: 0,
+            boardSize: selectedSize,
+            isPublic: isPublic
         };
         await gameRef.set(gameData);
         myColor = 1;
-        showMessage(lobbyMessage, `Partie créée. Code : ${gameId}. Partagez-le avec votre adversaire.`, 'lightgreen');
+
+        showMessage(lobbyMessage, `Partie créée (${selectedSize}x${selectedSize}). Code : ${gameId}.`, 'lightgreen');
         gameLinkDisplay.textContent = gameId;
         gameLinkSection.style.display = 'block';
+        if (isPublic) {
+            publicGameNote.style.display = "block";
+        } else {
+            publicGameNote.style.display = "none";
+        }
+
         await copyToClipboard(gameId);
         setupGameListener();
     } catch (e) {
@@ -783,33 +862,135 @@ createGameBtn.onclick = async () => {
         showMessage(lobbyMessage, "Erreur lors de la création de la partie.", "red");
     }
 };
-async function joinGame() {
-    const gameIdInputVal = gameIdInput.value.trim();
+
+/* ========== Rejoindre une partie ========== */
+async function joinGame(targetGameId = null) {
+    const gameIdInputVal = targetGameId || gameIdInput.value.trim();
     if (gameIdInputVal.length !== 4) { showMessage(lobbyMessage, "Veuillez entrer un code de partie à 4 chiffres.", "red"); return; }
+
     gameRef = db.ref('games/' + gameIdInputVal);
-    showMessage(lobbyMessage, "Partie rejointe. Connexion en cours...", "lightgreen");
+    showMessage(lobbyMessage, "Connexion à la partie...", "lightgreen");
+
     try {
         const snapshot = await gameRef.once('value');
         const gameData = snapshot.val();
-        if (!gameData || gameData.status !== 'waiting' || gameData.players.white) {
-            showMessage(lobbyMessage, "Partie introuvable ou déjà en cours.", "red");
+
+        if (!gameData) {
+            showMessage(lobbyMessage, "Partie introuvable.", "red");
             return;
         }
-        await gameRef.update({
-            'players/white': { uid: myUid, email: auth.currentUser.email, nickname: myNickname },
-            status: 'playing'
-        });
+
         gameId = gameIdInputVal;
-        myColor = 2;
+
+        // Détection de la taille du plateau
+        if (gameData.boardSize) updateBoardSize(gameData.boardSize);
+        else updateBoardSize(19); // Fallback
+
+        // Logique Joueur vs Spectateur
+        if (gameData.status === 'waiting' && !gameData.players.white) {
+            // Rejoindre en tant que joueur Blanc
+             await gameRef.update({
+                'players/white': { uid: myUid, email: auth.currentUser.email, nickname: myNickname },
+                status: 'playing'
+            });
+            myColor = 2;
+            showMessage(gameMessage, "Partie rejointe ! Vous êtes Blanc.", "lightgreen");
+        } else if (gameData.players.black.uid === myUid) {
+             // Reconnexion joueur Noir
+             myColor = 1;
+             showMessage(gameMessage, "Retour dans la partie (Noir).", "lightgreen");
+        } else if (gameData.players.white && gameData.players.white.uid === myUid) {
+             // Reconnexion joueur Blanc
+             myColor = 2;
+             showMessage(gameMessage, "Retour dans la partie (Blanc).", "lightgreen");
+        } else {
+            // Mode Spectateur
+            myColor = 0;
+            showMessage(gameMessage, "Mode Spectateur activé.", "lightblue");
+        }
+
         setupGameListener();
         showScreen(gameScreen);
-        showMessage(gameMessage, "Partie rejointe. En attente du coup de l'adversaire...", "lightgreen");
+
     } catch (error) {
         console.error("Erreur lors de la jonction de la partie:", error);
         showMessage(lobbyMessage, "Erreur lors de la jonction. Veuillez réessayer.", "red");
     }
 }
-joinGameBtn.onclick = joinGame;
+joinGameBtn.onclick = () => joinGame();
+
+/* ========== Matchmaking & Liste des parties ========== */
+function formatTime(timestamp) {
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "à l'instant";
+    if (mins < 60) return `${mins} min`;
+    const hours = Math.floor(mins / 60);
+    return `${hours} h`;
+}
+
+async function fetchPublicGames() {
+    waitingGamesList.innerHTML = '<p class="loading-text">Chargement...</p>';
+    activeGamesList.innerHTML = '<p class="loading-text">Chargement...</p>';
+
+    try {
+        // On récupère les parties publiques
+        // Note: Firebase Query est limitée, on filtre côté client pour ce MVP simple
+        const snapshot = await db.ref('games').orderByChild('isPublic').equalTo(true).limitToLast(50).once('value');
+
+        const games = [];
+        snapshot.forEach(childSnapshot => {
+            games.push({ id: childSnapshot.key, ...childSnapshot.val() });
+        });
+
+        // Séparation Waiting / Playing
+        const waitingGames = games.filter(g => g.status === 'waiting');
+        const activeGames = games.filter(g => g.status === 'playing');
+
+        // Tri Waiting: Plus long temps d'attente en premier (createdAt croissant)
+        waitingGames.sort((a, b) => a.createdAt - b.createdAt);
+
+        // Tri Active: Plus récent en premier
+        activeGames.sort((a, b) => b.createdAt - a.createdAt);
+
+        renderGameList(waitingGames, waitingGamesList, "Rejoindre");
+        renderGameList(activeGames, activeGamesList, "Regarder");
+
+    } catch (err) {
+        console.error("Erreur lors du chargement des parties :", err);
+        waitingGamesList.innerHTML = '<p class="error-text">Erreur de chargement.</p>';
+        activeGamesList.innerHTML = '<p class="error-text">Erreur de chargement.</p>';
+    }
+}
+
+function renderGameList(games, container, actionLabel) {
+    container.innerHTML = '';
+    if (games.length === 0) {
+        container.innerHTML = '<p class="loading-text">Aucune partie trouvée.</p>';
+        return;
+    }
+
+    games.forEach(game => {
+        const item = document.createElement('div');
+        item.className = 'game-item';
+
+        const player = game.players.black.nickname || "Inconnu";
+        const size = game.boardSize || 19;
+        const time = formatTime(game.createdAt);
+
+        item.innerHTML = `
+            <div class="game-item-info">
+                <div class="game-item-player">${player}</div>
+                <div class="game-item-details">${size}x${size} • ${time}</div>
+            </div>
+            <button onclick="joinGame('${game.id}')">${actionLabel}</button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+refreshListBtn.onclick = fetchPublicGames;
+
 canvas.addEventListener("click", e => {
     if (gameOver) return;
     const rect = canvas.getBoundingClientRect();

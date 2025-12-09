@@ -40,20 +40,62 @@
     </div>
 
     <div id="lobbyScreen" class="screen">
-      <h2>Bienvenue !</h2>
-      <div class="lobby-options">
-        <button id="createGameBtn">Créer une partie</button>
-        <div class="join-game-box">
-          <input type="text" id="gameIdInput" placeholder="Entrez un code de 4 chiffres">
-          <button id="joinGameBtn">Rejoindre</button>
-        </div>
+      <div class="lobby-container">
+        <!-- Sidebar pour la liste des parties -->
+        <aside class="game-list-sidebar">
+            <div class="list-header">
+                <h3>Parties en attente</h3>
+                <button id="refreshListBtn" title="Actualiser">↻</button>
+            </div>
+            <div id="waitingGamesList" class="games-list">
+                <p class="loading-text">Chargement...</p>
+            </div>
+
+            <div class="list-header" style="margin-top: 20px;">
+                <h3>Parties en cours</h3>
+            </div>
+             <div id="activeGamesList" class="games-list">
+                <p class="loading-text">Chargement...</p>
+            </div>
+        </aside>
+
+        <!-- Contenu principal du lobby -->
+        <main class="lobby-main">
+            <h2>Bienvenue !</h2>
+            <div class="lobby-options">
+                <div class="create-game-box">
+                    <h3>Créer une partie</h3>
+                    <div class="form-group">
+                        <label for="boardSizeSelect">Taille du plateau :</label>
+                        <select id="boardSizeSelect">
+                            <option value="9">9x9 (Rapide)</option>
+                            <option value="13">13x13 (Moyen)</option>
+                            <option value="19" selected>19x19 (Standard)</option>
+                        </select>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="publicGameCheckbox" checked>
+                        <label for="publicGameCheckbox">Partie Publique (visible dans la liste)</label>
+                    </div>
+                    <button id="createGameBtn">Créer la partie</button>
+                </div>
+
+                <div class="join-game-box">
+                    <h3>Rejoindre par code</h3>
+                    <input type="text" id="gameIdInput" placeholder="Code à 4 chiffres">
+                    <button id="joinGameBtn">Rejoindre</button>
+                </div>
+            </div>
+
+            <div id="gameLinkSection" class="game-info" style="display:none;">
+                <p>Partie créée !</p>
+                <p>Partagez ce code : <strong id="gameLinkDisplay"></strong></p>
+                <button id="copyLinkBtn">Copier le code</button>
+                <p class="info-note" id="publicGameNote" style="display:none;">Votre partie est visible dans la liste d'attente.</p>
+            </div>
+            <p id="lobbyMessage" class="message"></p>
+        </main>
       </div>
-      <div id="gameLinkSection" class="game-info" style="display:none;">
-        <p>Partagez ce code avec votre ami :</p>
-        <p id="gameLinkDisplay"></p>
-        <button id="copyLinkBtn">Copier le code</button>
-      </div>
-      <p id="lobbyMessage" class="message"></p>
     </div>
 
     <div id="gameScreen" class="screen">
