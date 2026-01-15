@@ -4,36 +4,45 @@
 
 /* ========== Variables & Reset ========== */
 :root {
-  /* Palette Obsidienne & Or & Néon */
-  --bg-main: #050508;
-  --bg-secondary: #0f0f13;
-  --bg-panel: #141419;
-  /* Solid color fallback */
-  --bg-panel-glass: rgba(20, 20, 28, 0.95);
-  /* Much more opaque */
+  /* Palette Zen : Bois, Pierre, Bambou */
+  --bg-main: #1e1e24;
+  /* Ardoise sombre profonde */
+  --bg-secondary: #2b2b35;
+  --bg-panel: #25252d;
+  --bg-panel-glass: rgba(30, 30, 36, 0.95);
+  /* Ardoise mate */
 
-  --border-glass: rgba(255, 255, 255, 0.15);
+  --border-glass: rgba(255, 255, 255, 0.1);
 
-  --primary-gold: #ffd700;
-  --primary-glow: rgba(255, 215, 0, 0.3);
-  --accent-blue: #00f0ff;
-  --accent-purple: #bd00ff;
+  /* Couleurs Naturelles */
+  --primary-wood: #c5a065;
+  /* Kaya (Bois de Go traditionnel) */
+  --primary-wood-dark: #8b6b3e;
+  --primary-glow: rgba(197, 160, 101, 0.2);
 
-  --text-main: #ffffff;
-  --text-muted: #cccccccc;
-  --text-inverse: #000000;
+  --accent-stone: #7d8c9a;
+  /* Pierre grise */
+  --accent-bamboo: #556b2f;
+  /* Vert Bambou discret */
+  --accent-shell: #f0f0f0;
+  /* Blanc Coquillage */
 
-  /* Font: User preferred sans-serif everywhere */
-  --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --text-main: #e6e6e6;
+  /* Blanc légèrement cassé */
+  --text-muted: #a0a0aa;
+  --text-inverse: #1a1a1d;
+
+  /* Font */
+  --font-main: 'Outfit', -apple-system, system-ui, sans-serif;
   --font-header: 'Outfit', sans-serif;
-  /* Removed Playfair */
 
-  --radius-lg: 16px;
-  --radius-md: 12px;
-  --radius-sm: 8px;
+  --radius-lg: 12px;
+  /* Un peu plus carré pour l'effet "bloc de bois/pierre" */
+  --radius-md: 8px;
+  --radius-sm: 4px;
 
-  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.5);
-  --shadow-neon: 0 0 15px var(--primary-glow);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-neon: 0 0 10px var(--primary-glow);
 }
 
 * {
@@ -44,9 +53,11 @@ body {
   margin: 0;
   font-family: var(--font-main);
   background-color: var(--bg-main);
-  /* Fond dynamique sombre */
-  /* Fond dynamique sombre */
-  background: radial-gradient(circle at 50% -20%, #1a1a2e 0%, #000000 60%);
+  /* Fond dynamique Zen */
+  /* Texture subtile de papier de riz ou pierre sombre */
+  background:
+    radial-gradient(circle at 20% 30%, #2a2a35 0%, transparent 40%),
+    linear-gradient(to bottom, #1e1e24, #121215);
   background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
@@ -78,7 +89,8 @@ body {
 }
 
 .zen-panel:hover {
-  border-color: rgba(212, 175, 55, 0.3);
+  border-color: rgba(197, 160, 101, 0.4);
+  /* Glow bois subtil */
 }
 
 /* ========== Header ========== */
@@ -94,12 +106,12 @@ header {
 .logo a {
   font-family: var(--font-header);
   font-size: 2.2rem;
-  color: var(--primary-gold);
+  color: var(--primary-wood);
   text-decoration: none;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 3px;
-  text-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .header-right {
@@ -148,18 +160,22 @@ header {
 }
 
 .level-badge {
-  background: linear-gradient(135deg, var(--accent-purple), #6a00ff);
-  color: white;
+  background: #4a4a55;
+  /* Gris Pierre */
+  color: #fff;
+  border: 1px solid #6a6a75;
 }
 
 .win-badge {
-  background: linear-gradient(135deg, var(--primary-gold), #ff8c00);
-  color: black;
+  background: linear-gradient(135deg, var(--primary-wood), var(--primary-wood-dark));
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .points-badge {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .xp-bar-container {
@@ -175,9 +191,9 @@ header {
 
 .xp-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  background: linear-gradient(90deg, var(--accent-bamboo), #6b8e23);
   border-radius: 3px;
-  box-shadow: 0 0 10px var(--accent-blue);
+  box-shadow: none;
   transition: width 0.5s ease-out;
 }
 
@@ -210,7 +226,7 @@ header {
 
 h2 {
   font-family: var(--font-header);
-  color: var(--primary-gold);
+  color: var(--primary-wood);
   font-weight: 400;
   font-size: 2.5rem;
   margin-bottom: 1.5rem;
@@ -228,19 +244,20 @@ h3 {
 
 /* ========== Controls & Inputs (Premium) ========== */
 button {
-  background: linear-gradient(135deg, var(--primary-gold) 0%, #b8860b 100%);
-  color: #000;
+  background: linear-gradient(135deg, var(--primary-wood) 0%, var(--primary-wood-dark) 100%);
+  color: #fff;
   border: none;
   padding: 12px 28px;
   border-radius: var(--radius-sm);
   font-family: var(--font-main);
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 button:hover {
@@ -251,7 +268,7 @@ button:hover {
 
 input,
 select {
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-glass);
   color: var(--text-main);
   padding: 14px 20px;
@@ -265,8 +282,8 @@ select {
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--primary-gold);
-  box-shadow: 0 0 15px var(--primary-glow);
+  border-color: var(--primary-wood);
+  box-shadow: 0 0 5px var(--primary-glow);
   background: rgba(0, 0, 0, 0.9);
 }
 
@@ -324,7 +341,7 @@ select option {
 .list-header h3 {
   margin: 0;
   font-size: 1rem;
-  color: var(--primary-gold);
+  color: var(--primary-wood);
 }
 
 #refreshListBtn {
@@ -373,7 +390,7 @@ select option {
 
 .game-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--primary-gold);
+  border-color: var(--primary-wood);
 }
 
 .game-item-player {
@@ -426,15 +443,142 @@ select option {
   display: block;
 }
 
+/* ========== Toggle Switch ========== */
 .checkbox-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 15px;
+  /* Espace entre le switch et le texte */
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* Cache la checkbox native brute */
+.checkbox-group input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* Le Text Label */
+.checkbox-group label {
+  cursor: pointer;
+  margin: 0;
+  /* Override */
+  font-weight: 500;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+}
+
+/* Pseudo-élément pour créer le "Track" du switch */
+.checkbox-group input[type="checkbox"]+label::before {
+  content: "";
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+  background-color: #3a3a45;
+  /* Track sombre désactivé */
+  border-radius: 20px;
+  margin-right: 15px;
+  /* Espace entre le switch et le texte */
+  position: relative;
+  transition: background-color 0.3s ease;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Pseudo-élément pour créer le "Thumb" (la boule) */
+.checkbox-group input[type="checkbox"]+label::after {
+  content: "";
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-color: #888;
+  /* Pierre grise désactivée */
+  border-radius: 50%;
+  position: absolute;
+  left: 45px;
+  /* Position absolue relative au parent ? Non, attention au context. */
+  /* La solution ::before/::after sur label est tricky si le label contient le texte.
+       Mieux vaut utiliser un span ou ajuster le positionnement.
+       Ici nous allons utiliser un positionnement relatif au label::before en trichant visuellement.
+       Mais le plus simple est de mettre le ::after en absolute par rapport au label mais il faut que le label soit relative.
+    */
+}
+
+/* Correction Toggle avec structure simple : */
+/* On va assumer que le HTML est : input + label.
+   Le label contient le texte.
+   On va mettre le switch AVANT le texte dans le label via ::before et ::after.
+*/
+
+.checkbox-group label {
+  position: relative;
+  padding-left: 65px;
+  /* Place pour le switch */
+  min-height: 26px;
+}
+
+.checkbox-group label::before {
+  /* Track */
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  content: "";
+  width: 50px;
+  height: 26px;
+  background-color: #333;
+  border-radius: 13px;
+  transition: all 0.3s;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  margin: 0;
+  /* Reset */
+  border: 1px solid #444;
+}
+
+.checkbox-group label::after {
+  /* Stone (Thumb) */
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle at 30% 30%, #a0a0a0, #555);
+  /* Pierre brute */
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Checked State */
+.checkbox-group input:checked+label::before {
+  background-color: var(--primary-wood-dark);
+  /* Activé : Bois sombre */
+  border-color: var(--primary-wood);
+}
+
+.checkbox-group input:checked+label::after {
+  left: 27px;
+  /* Slide à droite */
+  background: radial-gradient(circle at 30% 30%, #fff, #e0e0e0);
+  /* Pierre blanche nacrée */
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  /* Petit glow divin */
 }
 
 .game-info {
-  background: rgba(212, 175, 55, 0.05);
-  border: 1px solid var(--primary-gold);
+  background: rgba(197, 160, 101, 0.05);
+  /* Tint Kaya très léger */
+  border: 1px solid var(--primary-wood);
   padding: 25px 40px;
   border-radius: var(--radius-sm);
   margin-top: 40px;
@@ -444,7 +588,7 @@ select option {
 #gameLinkDisplay {
   font-family: monospace;
   font-size: 1.8rem;
-  color: var(--primary-gold);
+  color: var(--primary-wood);
   display: block;
   margin: 15px 0;
   letter-spacing: 5px;
@@ -461,7 +605,7 @@ select option {
   background: rgba(0, 0, 0, 0.5);
   padding: 15px 40px;
   border-radius: 4px;
-  border: 1px solid var(--primary-gold);
+  border: 1px solid var(--primary-wood);
   font-size: 1.1rem;
   min-width: 180px;
   text-align: center;
@@ -504,7 +648,7 @@ select option {
 }
 
 #passButton {
-  color: var(--primary-gold);
+  color: var(--primary-wood);
 }
 
 #forfeitButton {
@@ -533,8 +677,8 @@ select option {
 }
 
 .end-game-message-container {
-  background: #0a0a0c;
-  border: 1px solid var(--primary-gold);
+  background: var(--bg-panel);
+  border: 1px solid var(--primary-wood);
   padding: 50px 80px;
   border-radius: var(--radius-lg);
   text-align: center;
