@@ -74,6 +74,7 @@ let currentPlayer = 1;
 let myColor = null;
 let myUid = null;
 let myNickname = null;
+let myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0 };
 let gameId = null;
 let consecutivePasses = 0;
 let gameOver = false;
@@ -182,6 +183,73 @@ function showScreen(screen) {
 function showMessage(el, text, color = "#bbb") {
     el.innerText = text;
     el.style.color = color;
+}
+
+function updatePlayerInfoDisplay() {
+    if (!myNickname) {
+        playerInfo.innerHTML = "Non connecté";
+        return;
+    }
+    const xpNeeded = myStats.level * 100;
+    playerInfo.innerHTML = `
+        <div class="profile-display">
+            <span class="profile-name">${myNickname}</span>
+            <div class="profile-stats">
+                <span class="stat-badge level-badge">Niv. ${myStats.level}</span>
+                <span class="stat-badge win-badge">🏆 ${myStats.wins}</span>
+                <span class="stat-badge points-badge">★ ${Math.floor(myStats.totalPoints)}</span>
+            </div>
+            <div class="xp-bar-container" title="XP: ${Math.floor(myStats.currentXP)} / ${xpNeeded}">
+                <div class="xp-bar-fill" style="width: ${(myStats.currentXP / xpNeeded) * 100}%"></div>
+            </div>
+        </div>
+    `;
+}
+
+async function updateMyStats(isWinner, points) {
+    if (!myUid) return;
+
+    // Gain d'XP : Simple (100 pour win, 25 pour défaite) + points du jeu
+    let xpGain = isWinner ? 100 : 25;
+    xpGain += Math.max(0, Math.floor(points / 2)); // 1 XP pour 2 points de territoire
+
+    myStats.gamesPlayed = (myStats.gamesPlayed || 0) + 1;
+    if (isWinner) myStats.wins = (myStats.wins || 0) + 1;
+    else myStats.losses = (myStats.losses || 0) + 1;
+
+    myStats.totalPoints = (myStats.totalPoints || 0) + points;
+    myStats.currentXP = (myStats.currentXP || 0) + xpGain;
+
+    // Level Up Loop
+    let leveledUp = false;
+    let xpNeeded = myStats.level * 100;
+    while (myStats.currentXP >= xpNeeded) {
+        myStats.currentXP -= xpNeeded;
+        myStats.level++;
+        xpNeeded = myStats.level * 100;
+        leveledUp = true;
+    }
+
+    if (leveledUp) {
+        showMessage(gameMessage, `Niveau Supérieur ! Vous êtes maintenant niveau ${myStats.level} !`, "gold");
+        // Petit effet confetti supplémentaire pour le level up ?
+        confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 }, colors: ['#FFD700', '#FFA500'] });
+    }
+
+    updatePlayerInfoDisplay();
+
+    try {
+        await db.ref(`users/${myUid}`).update({
+            wins: myStats.wins,
+            losses: myStats.losses,
+            totalPoints: myStats.totalPoints,
+            level: myStats.level,
+            currentXP: myStats.currentXP,
+            gamesPlayed: myStats.gamesPlayed
+        });
+    } catch (e) {
+        console.error("Erreur sauvegarde stats:", e);
+    }
 }
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text)
@@ -500,6 +568,25 @@ async function endGame(message) {
         passButton.disabled = true;
         forfeitButton.disabled = true;
 
+        // Mise à jour des stats si on est un joueur
+        if (myColor === 1 || myColor === 2) {
+            // Calcul du score final pour stats
+            const { black, white } = computeScore(board);
+            let myScore = (myColor === 1) ? black : white;
+            let isWinner = (myColor === 1 && black > white) || (myColor === 2 && white > black);
+            // Cas spécial abandon
+            if (message && message.includes("gagne par abandon")) {
+                if (message.includes(myNickname)) {
+                    isWinner = true;
+                    myScore += 20; // Bonus score pour victoire par abandon
+                } else {
+                    isWinner = false;
+                }
+            }
+
+            updateMyStats(isWinner, myScore);
+        }
+
     } catch (err) {
         console.error("Erreur dans endGame:", err);
         // En cas d'erreur, on ramène simplement au lobby
@@ -615,7 +702,7 @@ function drawGrid() {
     }));
 
     // Coordonnées (1-19, A-T sans I)
-    ctx.fillStyle = "#8b5a2b"; // Couleur bois foncé
+    ctx.fillStyle = "#d4af37"; // Couleur Or pour le thème sombre
     ctx.font = "12px 'Outfit'";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -655,46 +742,55 @@ function drawStones() {
             if (board[y][x] === 1 || board[y][x] === 2) {
                 const cx = offsetX + x * CELL_SIZE;
                 const cy = offsetY + y * CELL_SIZE;
+                const radius = CELL_SIZE / 2.15;
+
+                // Ombre portée réaliste
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = radius / 2;
+                ctx.shadowOffsetX = radius / 5;
+                ctx.shadowOffsetY = radius / 5;
 
                 ctx.beginPath();
-                ctx.arc(cx, cy, CELL_SIZE / 2.1, 0, 2 * Math.PI);
-
-                // Ombre portée légère pour effet 3D
-                ctx.shadowColor = 'rgba(0,0,0,0.3)';
-                ctx.shadowBlur = 4;
-                ctx.shadowOffsetX = 2;
-                ctx.shadowOffsetY = 2;
+                ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
 
                 if (board[y][x] === 1) {
-                    // Noir mat
-                    ctx.fillStyle = "#111";
+                    // Pierre Noire (Slate) - Mat avec léger reflet diffus
+                    const grad = ctx.createRadialGradient(cx - radius / 3, cy - radius / 3, radius / 10, cx, cy, radius);
+                    grad.addColorStop(0, "#444"); // Reflet
+                    grad.addColorStop(0.3, "#000"); // Corps
+                    grad.addColorStop(1, "#000");   // Bord
+                    ctx.fillStyle = grad;
                 } else {
-                    // Blanc coquillage (Shell)
-                    ctx.fillStyle = "#fcfcfc";
+                    // Pierre Blanche (Shell) - Brillante/Nacrée
+                    const grad = ctx.createRadialGradient(cx - radius / 3, cy - radius / 3, radius / 5, cx, cy, radius);
+                    grad.addColorStop(0, "#fff"); // Highlight puissant
+                    grad.addColorStop(0.1, "#fff");
+                    grad.addColorStop(0.9, "#ddd"); // Corps nacré
+                    grad.addColorStop(1, "#bbb");   // Bord ombré
+                    ctx.fillStyle = grad;
                 }
                 ctx.fill();
 
-                // Reset Ombre
+                // Reset Ombre pour ne pas polluer les autres dessins
                 ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
 
-                // Reflet sur pierre noire ou contour pierre blanche
-                /*if (board[y][x] === 1) {
-                     ctx.fillStyle = "rgba(255,255,255,0.1)";
-                     ctx.beginPath();
-                     ctx.arc(cx - CELL_SIZE/6, cy - CELL_SIZE/6, CELL_SIZE/6, 0, 2 * Math.PI);
-                     ctx.fill();
-                }*/
-
-                ctx.strokeStyle = "rgba(0,0,0,0.1)";
-                ctx.lineWidth = 1;
-                ctx.stroke();
-
-                // Marqueur dernier coup
+                // Marqueur dernier coup (subtil point coloré pour contraste)
                 if (lastMove && lastMove.x === x && lastMove.y === y) {
                     ctx.beginPath();
-                    ctx.arc(cx, cy, CELL_SIZE / 5, 0, 2 * Math.PI);
-                    ctx.fillStyle = (board[y][x] === 1) ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.8)";
+                    ctx.arc(cx, cy, radius / 4, 0, 2 * Math.PI);
+                    if (board[y][x] === 1) {
+                        ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; // Blanc transp sur noir
+                        ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                    } else {
+                        ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; // Noir transp sur blanc
+                        ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
+                    }
                     ctx.fill();
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
                 }
             }
         }
@@ -924,9 +1020,15 @@ logoutBtn.onclick = () => {
 saveNicknameBtn.onclick = async () => {
     const nickname = nicknameInput.value.trim();
     if (nickname.length < 3) { showMessage(nicknameMessage, "Le pseudo doit avoir au moins 3 caractères.", "red"); return; }
-    await db.ref(`users/${myUid}`).set({ email: auth.currentUser.email, nickname: nickname });
     myNickname = nickname;
-    playerInfo.textContent = `${myNickname}`;
+    myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0 };
+    await db.ref(`users/${myUid}`).update({
+        level: 1,
+        wins: 0,
+        totalPoints: 0,
+        currentXP: 0
+    });
+    updatePlayerInfoDisplay();
     showScreen(lobbyScreen);
 };
 auth.onAuthStateChanged(async user => {
@@ -934,10 +1036,24 @@ auth.onAuthStateChanged(async user => {
         myUid = user.uid;
         logoutBtn.style.display = "block";
         const snap = await db.ref(`users/${myUid}`).once("value");
-        myNickname = snap.val() ? snap.val().nickname : null;
+        const userData = snap.val();
+        if (userData) {
+            myNickname = userData.nickname;
+            myStats = {
+                wins: userData.wins || 0,
+                losses: userData.losses || 0,
+                totalPoints: userData.totalPoints || 0,
+                level: userData.level || 1,
+                currentXP: userData.currentXP || 0,
+                gamesPlayed: userData.gamesPlayed || 0
+            };
+        } else {
+            myNickname = null;
+        }
+
         if (!myNickname) showScreen(nicknameScreen);
         else {
-            playerInfo.textContent = `${myNickname}`;
+            updatePlayerInfoDisplay();
             showScreen(lobbyScreen);
         }
     } else {

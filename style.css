@@ -1,39 +1,31 @@
 /* ========================================= */
-/* Online Go Game - Bamboo Zen Theme        */
+/* Online Go Game - Dark Luxury Theme       */
 /* ========================================= */
 
 /* ========== Variables & Reset ========== */
-:root {
-  /* Palette Naturelle & Organique */
-  --bg-main: #f4f1ea;
-  /* Rice Paper / Cream */
-  --bg-wood: #d9bfa0;
-  /* Light Wood */
-  --bg-panel: rgba(255, 253, 245, 0.85);
-  /* Semi-transparent Rice Paper */
+--border-glass: rgba(255, 255, 255, 0.1);
 
-  --primary-bamboo: #5a7d3b;
-  /* Fresh Bamboo Green */
-  --primary-accent: #8b5a2b;
-  /* Aged Wood / Clay */
+--primary-gold: #ffd700;
+--primary-glow: rgba(255, 215, 0, 0.5);
+--accent-blue: #00f0ff;
+/* Cyberpunk Legacy */
+--accent-purple: #bd00ff;
 
-  --text-main: #2c2925;
-  /* Ink Black */
-  --text-muted: #5d5d5a;
-  /* Stone Grey */
-  --text-light: #f0f0eb;
+--text-main: #ffffff;
+--text-muted: #b0b0b0;
 
-  --border-organic: rgba(90, 125, 59, 0.2);
+--font-main: 'Outfit',
+sans-serif;
+--font-header: 'Playfair Display',
+serif;
 
-  --font-main: 'Outfit', sans-serif;
-  --font-header: 'Playfair Display', serif;
+--radius-lg: 24px;
+/* Plus rond */
+--radius-md: 16px;
+--radius-sm: 8px;
 
-  --radius-lg: 24px;
-  --radius-md: 16px;
-  --radius-sm: 8px;
-
-  --shadow-soft: 0 10px 30px -5px rgba(90, 80, 60, 0.15);
-  --shadow-hover: 0 15px 35px -5px rgba(90, 80, 60, 0.25);
+--shadow-card: 0 10px 40px -10px rgba(0, 0, 0, 0.8);
+--shadow-neon: 0 0 20px var(--primary-glow);
 }
 
 * {
@@ -44,8 +36,10 @@ body {
   margin: 0;
   font-family: var(--font-main);
   background-color: var(--bg-main);
-  /* Texture subtile de papier */
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d0c1' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  /* Fond dynamique sombre */
+  /* Fond dynamique sombre */
+  background: radial-gradient(circle at 50% -20%, #1a1a2e 0%, #000000 60%);
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
@@ -53,7 +47,7 @@ body {
   justify-content: center;
 }
 
-/* ========== Structure & Organic Containers ========== */
+/* ========== Structure & Glass ========== */
 #app {
   width: 100%;
   max-width: 1400px;
@@ -64,19 +58,19 @@ body {
   padding: 20px;
 }
 
-/* Zen Panel Utility */
+/* Dark Glass Utility */
 .zen-panel {
   background: var(--bg-panel);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--border-organic);
-  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-card);
   border-radius: var(--radius-lg);
-  transition: transform 0.4s ease, box-shadow 0.4s ease;
+  transition: transform 0.3s ease, border-color 0.3s;
 }
 
 .zen-panel:hover {
-  box-shadow: var(--shadow-hover);
+  border-color: rgba(212, 175, 55, 0.3);
 }
 
 /* ========== Header ========== */
@@ -92,12 +86,13 @@ header {
 .logo a {
   font-family: var(--font-header);
   font-size: 2.2rem;
-  color: var(--primary-bamboo);
+  color: var(--primary-gold);
   text-decoration: none;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  /* Effet de texture d'encre */
-  background: linear-gradient(180deg, var(--primary-bamboo) 0%, var(--primary-accent) 100%);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(45deg, #d4af37, #fdf5e6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -109,15 +104,79 @@ header {
 }
 
 .player-info {
-  font-weight: 500;
-  color: var(--primary-accent);
-  background: rgba(255, 255, 255, 0.6);
-  padding: 8px 16px;
-  border-radius: 20px;
-  border: 1px solid var(--border-organic);
+  /* Container global du profil header */
+  /* Reset des styles précédents qui étaient juste du texte */
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
-/* ========== Screens (General) ========== */
+/* Nouveaux styles du profil riche */
+.profile-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.profile-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.profile-stats {
+  display: flex;
+  gap: 8px;
+}
+
+.stat-badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  text-transform: uppercase;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.level-badge {
+  background: linear-gradient(135deg, var(--accent-purple), #6a00ff);
+  color: white;
+}
+
+.win-badge {
+  background: linear-gradient(135deg, var(--primary-gold), #ff8c00);
+  color: black;
+}
+
+.points-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+}
+
+.xp-bar-container {
+  width: 100%;
+  min-width: 120px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+  margin-top: 2px;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  border-radius: 3px;
+  box-shadow: 0 0 10px var(--accent-blue);
+  transition: width 0.5s ease-out;
+}
+
+/* ========== Screens ========== */
 .screen {
   display: none;
   flex: 1;
@@ -146,51 +205,52 @@ header {
 
 h2 {
   font-family: var(--font-header);
-  color: var(--primary-accent);
+  color: var(--primary-gold);
   font-weight: 400;
-  font-size: 2.4rem;
+  font-size: 2.5rem;
   margin-bottom: 1.5rem;
   text-align: center;
 }
 
 h3 {
   font-family: var(--font-main);
-  font-weight: 600;
-  color: var(--primary-bamboo);
+  font-weight: 500;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 1px;
   margin-bottom: 1rem;
-  letter-spacing: 0.5px;
 }
 
-/* ========== Controls & Inputs (Fluid) ========== */
+/* ========== Controls & Inputs (Premium) ========== */
 button {
-  background: var(--primary-bamboo);
-  color: white;
+  background: linear-gradient(135deg, var(--primary-gold) 0%, #b8860b 100%);
+  color: #000;
   border: none;
-  padding: 14px 28px;
-  border-radius: 50px;
-  /* Fully rounded like a stone */
+  padding: 12px 28px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-main);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  /* Bouncy */
-  font-size: 1rem;
-  box-shadow: 0 4px 15px rgba(90, 125, 59, 0.3);
+  transition: all 0.3s;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
 }
 
 button:hover {
-  background: var(--primary-accent);
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 8px 20px rgba(139, 90, 43, 0.3);
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-neon);
 }
 
 input,
 select {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid #dcdcdc;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-glass);
   color: var(--text-main);
   padding: 14px 20px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   font-family: var(--font-main);
   width: 100%;
   transition: all 0.3s;
@@ -200,9 +260,8 @@ select {
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--primary-bamboo);
-  background: white;
-  box-shadow: 0 0 0 3px rgba(90, 125, 59, 0.1);
+  border-color: var(--primary-gold);
+  box-shadow: 0 0 10px var(--primary-glow);
 }
 
 /* ========== Auth & Forms ========== */
@@ -215,13 +274,7 @@ select:focus {
   gap: 20px;
   text-align: center;
 
-  /* Apply Zen Panel Styles manually */
   background: var(--bg-panel);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid white;
-  /* Lighter border for clean look */
-  box-shadow: var(--shadow-soft);
   border-radius: var(--radius-lg);
 }
 
@@ -242,12 +295,9 @@ select:focus {
   flex-direction: column;
   gap: 20px;
   padding: 25px;
-  overflow: hidden;
 
   background: var(--bg-panel);
-  border: 1px solid white;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
 }
 
 .list-header {
@@ -255,26 +305,25 @@ select:focus {
   justify-content: space-between;
   align-items: center;
   padding-bottom: 15px;
-  border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
-  /* Stitching effect */
+  border-bottom: 1px solid var(--border-glass);
 }
 
 .list-header h3 {
   margin: 0;
-  font-size: 1.2rem;
-  color: var(--primary-accent);
+  font-size: 1rem;
+  color: var(--primary-gold);
 }
 
 #refreshListBtn {
   background: transparent;
-  color: var(--primary-bamboo);
-  padding: 8px;
+  color: var(--text-muted);
   font-size: 1.4rem;
+  padding: 0;
   box-shadow: none;
 }
 
 #refreshListBtn:hover {
-  color: var(--primary-accent);
+  color: var(--primary-gold);
   transform: rotate(180deg);
   background: transparent;
   box-shadow: none;
@@ -289,41 +338,38 @@ select:focus {
   padding-right: 8px;
 }
 
-/* Custom Scrollbar */
 .games-list::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .games-list::-webkit-scrollbar-thumb {
-  background: #d0c8b6;
-  border-radius: 3px;
+  background: #333;
+  border-radius: 2px;
 }
 
 .game-item {
-  background: white;
-  padding: 15px 20px;
-  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 15px;
+  border-radius: var(--radius-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 0.2s;
   border: 1px solid transparent;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
 }
 
 .game-item:hover {
-  transform: translateX(5px);
-  border-color: var(--primary-bamboo);
-  box-shadow: 0 4px 12px rgba(90, 125, 59, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--primary-gold);
 }
 
 .game-item-player {
   color: var(--text-main);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .game-item-details {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
 }
 
@@ -335,9 +381,7 @@ select:focus {
   justify-content: center;
   align-items: center;
   padding: 40px;
-
-  /* Subtle decoration */
-  background-image: radial-gradient(circle at center, rgba(90, 125, 59, 0.03) 0%, transparent 70%);
+  position: relative;
 }
 
 .lobby-options {
@@ -354,24 +398,17 @@ select:focus {
 .join-game-box {
   flex: 1;
   padding: 30px;
-  background: white;
+  background: var(--bg-panel);
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
-  /* Special floaty shadow */
-  transition: transform 0.3s;
   display: flex;
   flex-direction: column;
   gap: 15px;
-}
-
-.create-game-box:hover,
-.join-game-box:hover {
-  transform: translateY(-5px);
+  border: 1px solid var(--border-glass);
 }
 
 .form-group label {
   color: var(--text-muted);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   margin-bottom: 8px;
   display: block;
 }
@@ -382,66 +419,55 @@ select:focus {
   gap: 12px;
 }
 
-.checkbox-group input {
-  width: 20px;
-  height: 20px;
-}
-
 .game-info {
-  background: white;
-  border-left: 4px solid var(--primary-bamboo);
-  /* Stylish border */
+  background: rgba(212, 175, 55, 0.05);
+  border: 1px solid var(--primary-gold);
   padding: 25px 40px;
   border-radius: var(--radius-sm);
   margin-top: 40px;
   text-align: center;
-  box-shadow: var(--shadow-soft);
 }
 
 #gameLinkDisplay {
   font-family: monospace;
   font-size: 1.8rem;
-  color: var(--primary-accent);
-  background: #f4f4f4;
-  padding: 5px 15px;
-  border-radius: 4px;
-  display: inline-block;
+  color: var(--primary-gold);
+  display: block;
   margin: 15px 0;
+  letter-spacing: 5px;
 }
 
 /* ========== Game Board Screen ========== */
 .score-container {
   display: flex;
-  gap: 50px;
+  gap: 40px;
   margin-bottom: 25px;
 }
 
 .player-score {
-  background: white;
+  background: rgba(0, 0, 0, 0.5);
   padding: 15px 40px;
-  border-radius: 50px;
-  font-size: 1.2rem;
-  min-width: 160px;
+  border-radius: 4px;
+  border: 1px solid var(--primary-gold);
+  font-size: 1.1rem;
+  min-width: 180px;
   text-align: center;
   color: var(--text-main);
-  box-shadow: var(--shadow-soft);
-  font-weight: 600;
-  border: 1px solid transparent;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-/* Highlight active? maybe in future JS, but now styling is clean */
-
 #goBoard {
-  background-color: #DCB35C;
-  /* Kaya Wood Color */
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  /* Deep shadow */
+  /* Dark Wood Texture Color (Walnut) */
+  background-color: #3e2723;
+  /* Simple gradient overlay for sheen */
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.1) 100%);
+
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
   border-radius: 4px;
   max-width: 100%;
   height: auto;
   cursor: crosshair;
-  /* Wood texture effect via CSS gradient */
-  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.05) 100%);
+  border: 2px solid #5d4037;
 }
 
 .controls {
@@ -451,23 +477,25 @@ select:focus {
 }
 
 .controls button {
-  background: white;
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
-  border: 1px solid #eee;
+  border: 1px solid var(--border-glass);
+  box-shadow: none;
 }
 
 .controls button:hover {
-  background: #f9f9f9;
-  border-color: #ddd;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--text-main);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 #passButton {
-  color: var(--primary-bamboo);
-  font-weight: 700;
+  color: var(--primary-gold);
 }
 
 #forfeitButton {
-  color: #d64545;
+  color: #ff5252;
 }
 
 
@@ -475,9 +503,8 @@ select:focus {
 .end-game-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(244, 241, 234, 0.9);
-  /* Light overlay */
-  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -493,14 +520,14 @@ select:focus {
 }
 
 .end-game-message-container {
-  background: white;
-  border: none;
+  background: #0a0a0c;
+  border: 1px solid var(--primary-gold);
   padding: 50px 80px;
   border-radius: var(--radius-lg);
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-  transform: scale(0.95);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 50px rgba(212, 175, 55, 0.2);
+  transform: scale(0.9);
+  transition: transform 0.4s;
 }
 
 .end-game-overlay.active .end-game-message-container {
@@ -508,17 +535,14 @@ select:focus {
 }
 
 .end-game-message {
-  font-size: 3.5rem;
-  font-family: var(--font-header);
-  color: var(--primary-accent);
+  font-size: 3rem;
+  color: var(--primary-gold);
   margin: 0;
-  text-shadow: none;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
 }
 
 /* ========== RESPONSIVE ========== */
 @media (max-width: 900px) {
-
-  /* Tablet */
   .lobby-container {
     grid-template-columns: 1fr;
     height: auto;
@@ -532,8 +556,6 @@ select:focus {
 }
 
 @media (max-width: 600px) {
-
-  /* Mobile */
   h1.logo {
     font-size: 1.8rem;
   }
@@ -551,17 +573,16 @@ select:focus {
 
   .score-container {
     gap: 15px;
+    flex-direction: column;
   }
 
   .player-score {
-    padding: 10px 20px;
-    font-size: 1rem;
+    padding: 10px;
+    width: 100%;
     min-width: auto;
-    flex: 1;
   }
 
   button {
     width: 100%;
-    padding: 16px;
   }
 }
