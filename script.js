@@ -63,14 +63,15 @@ const publicGameNote = document.getElementById("publicGameNote");
 
 
 /* ========== Variables d'état & Constantes ========== */
-let BOARD_SIZE = 19; // Valeur par défaut, sera mise à jour dynamiquement
+let BOARD_SIZE = 19;
 const KOMI = 7.5;
-let CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
+let CELL_SIZE;
+const BOARD_MARGIN = 30; // Espace pour les coordonnées
 
 let board = [];
 let history = [];
-let currentPlayer = 1; // 1: black, 2: white
-let myColor = null; // 1: black, 2: white, 0: spectator
+let currentPlayer = 1;
+let myColor = null;
 let myUid = null;
 let myNickname = null;
 let gameId = null;
@@ -80,6 +81,18 @@ let gameRef = null;
 let hoverPoint = null;
 let gameListener = null;
 let moveInProgress = false;
+let lastMove = null; // {x, y}
+let prisoners = { black: 0, white: 0 };
+
+// Sons (Base64 courtes pour ne pas dépendre de fichiers externes)
+const soundClick = new Audio("data:audio/mp3;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAG1xUAALD+AAXG1lQiNzY0E0UAAQAAgAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAg");
+const soundStart = new Audio("data:audio/mp3;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAG1xUAALD+AAXG1lQiNzY0E0UAAQAAgAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAg");
+// Note: Placeholder base64, real sounds would be better, but avoiding huge strings here. 
+// Using silent placeholders to avoid breaking code if user doesn't strictly need high-def audio. 
+// Actually, I will use a simple "beep" trick or just valid empty mp3s to not error out, 
+// and rely on the fact that simple 'click' is better implemented via a VERY short url or just no sound if assets missing.
+// Let's assume the user accepts "visual" perfection first. I'll put a real short 'pop' sound data uri if I can.
+// Reverting to empty because valid base64 is long. I will implement the logic and leave a comment.
 
 /* ========== WebRTC - Conservé pour l'initialisation ========== */
 let peerConnection = null;
@@ -180,9 +193,11 @@ function copyToClipboard(text) {
 }
 
 // Mise à jour de la taille du plateau et des cellules
+// Mise à jour de la taille du plateau et des cellules
 function updateBoardSize(size) {
     BOARD_SIZE = parseInt(size);
-    CELL_SIZE = canvas.width / (BOARD_SIZE + 1);
+    // On laisse de la place pour les coordonnées (BOARD_SIZE + 2 cases virtuelles)
+    CELL_SIZE = (canvas.width - 2 * BOARD_MARGIN) / BOARD_SIZE;
     board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
 }
 
@@ -253,8 +268,10 @@ function computeScore(state) {
 }
 function updateScore() {
     const { black, white } = computeScore(board);
-    blackScoreEl.textContent = `Noir: ${black}`;
-    whiteScoreEl.textContent = `Blanc: ${white.toFixed(1)}`;
+    // Score Total = Territoire + Prisonniers + (Komi pour Blanc)
+    // Ici calcul simplifié territoire uniquement, on ajoute l'affichage prisonniers
+    blackScoreEl.innerHTML = `Noir<br><span style="font-size:0.8em">Captures: ${prisoners.black}</span>`;
+    whiteScoreEl.innerHTML = `Blanc<br><span style="font-size:0.8em">Captures: ${prisoners.white} • Komi: ${KOMI}</span>`;
 }
 function canPlay(playerColor, boardState) {
     for (let y = 0; y < BOARD_SIZE; y++) {
@@ -328,6 +345,12 @@ function playMove(x, y) {
 
     // Si on arrive ici, le coup est valide
     moveInProgress = true;
+    
+    // Jouer un son
+    // soundClick.play().catch(e => {}); 
+
+    // Mise à jour des prisonniers
+    prisoners[currentPlayer === 1 ? 'black' : 'white'] += result.capturedStones;
 
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     saveGameToFirebase({
@@ -335,7 +358,9 @@ function playMove(x, y) {
         currentPlayer: nextPlayer,
         history: [...history, newStateStr],
         consecutivePasses: 0,
-        lastReason: "move"
+        lastReason: "move",
+        lastMove: { x, y },
+        prisoners: prisoners
     });
 }
 
@@ -553,19 +578,30 @@ async function cleanUpOldGames() {
 /* ========== Gestion du Canvas (Dessin et Événements) ========== */
 function drawGrid() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 1.5;
-    for (let i = 1; i <= BOARD_SIZE; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * CELL_SIZE, CELL_SIZE);
-        ctx.lineTo(i * CELL_SIZE, BOARD_SIZE * CELL_SIZE);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(CELL_SIZE, i * CELL_SIZE);
-        ctx.lineTo(BOARD_SIZE * CELL_SIZE, i * CELL_SIZE);
-        ctx.stroke();
+    
+    // Dessin du fond (déjà fait par CSS, mais on peut ajouter une teinte si besoin)
+    
+    ctx.strokeStyle = "#5d5d5a"; // Couleur des lignes (Pierre/Encre)
+    ctx.lineWidth = 1;
+
+    const halfCell = CELL_SIZE / 2;
+    const offsetX = BOARD_MARGIN + halfCell;
+    const offsetY = BOARD_MARGIN + halfCell;
+
+    ctx.beginPath();
+    // Lignes verticales
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        ctx.moveTo(offsetX + i * CELL_SIZE, offsetY);
+        ctx.lineTo(offsetX + i * CELL_SIZE, offsetY + (BOARD_SIZE - 1) * CELL_SIZE);
     }
-    // Etoiles (Hoshi) adaptatives selon la taille
+    // Lignes horizontales
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        ctx.moveTo(offsetX, offsetY + i * CELL_SIZE);
+        ctx.lineTo(offsetX + (BOARD_SIZE - 1) * CELL_SIZE, offsetY + i * CELL_SIZE);
+    }
+    ctx.stroke();
+
+    // Etoiles (Hoshi)
     let starPoints = [];
     if (BOARD_SIZE === 19) starPoints = [3, 9, 15];
     else if (BOARD_SIZE === 13) starPoints = [3, 6, 9];
@@ -573,28 +609,93 @@ function drawGrid() {
 
     starPoints.forEach(x => starPoints.forEach(y => {
         ctx.beginPath();
-        ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, 4, 0, 2 * Math.PI);
-        ctx.fillStyle = "#000";
+        ctx.arc(offsetX + x * CELL_SIZE, offsetY + y * CELL_SIZE, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = "#5d5d5a";
         ctx.fill();
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 1;
-        ctx.stroke();
     }));
+
+    // Coordonnées (1-19, A-T sans I)
+    ctx.fillStyle = "#8b5a2b"; // Couleur bois foncé
+    ctx.font = "12px 'Outfit'";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const letters = "ABCDEFGHJKLMNOPQRST".split(""); // Pas de I
+
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        // Chiffres (Gauche et Droite) - Inversés pour le Go (1 en bas) habituellement, 
+        // mais ici on garde 1 en haut par simplicité standard array, ou on inverse pour faire "Pro".
+        // Standard Go : 1 en bas. On va rester simple : 1 en haut correspond à l'index 0.
+        // Si on veut faire "Pro", 19 est en haut (index 0).
+        // Faisons le mapping : Index 0 -> 1 (ou 19).
+        // Pour ne pas embrouiller l'utilisateur qui clique sur (0,0), affichons 1.
+        
+        let numLabel = (i + 1).toString(); 
+        
+        // Gauche
+        ctx.fillText(numLabel, BOARD_MARGIN / 2, offsetY + i * CELL_SIZE);
+        // Droite
+        ctx.fillText(numLabel, canvas.width - BOARD_MARGIN / 2, offsetY + i * CELL_SIZE);
+        
+        // Lettres (Haut et Bas)
+        let charLabel = letters[i] || "";
+        // Haut
+        ctx.fillText(charLabel, offsetX + i * CELL_SIZE, BOARD_MARGIN / 2);
+        // Bas
+        ctx.fillText(charLabel, offsetX + i * CELL_SIZE, canvas.height - BOARD_MARGIN / 2);
+    }
 }
 function drawStones() {
+    const halfCell = CELL_SIZE / 2;
+    const offsetX = BOARD_MARGIN + halfCell;
+    const offsetY = BOARD_MARGIN + halfCell;
+
     for (let y = 0; y < BOARD_SIZE; y++) {
         for (let x = 0; x < BOARD_SIZE; x++) {
             if (board[y][x] === 1 || board[y][x] === 2) {
+                const cx = offsetX + x * CELL_SIZE;
+                const cy = offsetY + y * CELL_SIZE;
+
                 ctx.beginPath();
-                ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
-                ctx.shadowColor = 'transparent';
-                ctx.shadowBlur = 0;
-                if (board[y][x] === 1) { ctx.fillStyle = "#000"; }
-                else { ctx.fillStyle = "#fff"; }
+                ctx.arc(cx, cy, CELL_SIZE / 2.1, 0, 2 * Math.PI);
+                
+                // Ombre portée légère pour effet 3D
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+
+                if (board[y][x] === 1) { 
+                    // Noir mat
+                    ctx.fillStyle = "#111"; 
+                } else { 
+                    // Blanc coquillage (Shell)
+                    ctx.fillStyle = "#fcfcfc"; 
+                }
                 ctx.fill();
-                ctx.strokeStyle = board[y][x] === 1 ? "#fff" : "#000";
+                
+                // Reset Ombre
+                ctx.shadowColor = 'transparent';
+
+                // Reflet sur pierre noire ou contour pierre blanche
+                /*if (board[y][x] === 1) {
+                     ctx.fillStyle = "rgba(255,255,255,0.1)";
+                     ctx.beginPath();
+                     ctx.arc(cx - CELL_SIZE/6, cy - CELL_SIZE/6, CELL_SIZE/6, 0, 2 * Math.PI);
+                     ctx.fill();
+                }*/
+
+                ctx.strokeStyle = "rgba(0,0,0,0.1)";
                 ctx.lineWidth = 1;
                 ctx.stroke();
+
+                // Marqueur dernier coup
+                if (lastMove && lastMove.x === x && lastMove.y === y) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, CELL_SIZE / 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = (board[y][x] === 1) ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.8)";
+                    ctx.fill();
+                }
             }
         }
     }
@@ -602,22 +703,27 @@ function drawStones() {
 function drawHoverPoint() {
     if (hoverPoint) {
         const [x, y, isLegal] = hoverPoint;
+        const halfCell = CELL_SIZE / 2;
+        const offsetX = BOARD_MARGIN + halfCell;
+        const offsetY = BOARD_MARGIN + halfCell;
+        const cx = offsetX + x * CELL_SIZE;
+        const cy = offsetY + y * CELL_SIZE;
+
         if (isLegal) {
             ctx.beginPath();
-            ctx.fillStyle = myColor === 1 ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
-            ctx.arc((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE, CELL_SIZE / 2.2, 0, 2 * Math.PI);
+            ctx.fillStyle = myColor === 1 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)';
+            ctx.arc(cx, cy, CELL_SIZE / 2.2, 0, 2 * Math.PI);
             ctx.fill();
-            ctx.strokeStyle = myColor === 1 ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
         } else {
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-            ctx.lineWidth = 4;
+            // Croix rouge discrète
+            ctx.strokeStyle = 'rgba(200, 50, 50, 0.6)';
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo((x + 1) * CELL_SIZE - CELL_SIZE / 3, (y + 1) * CELL_SIZE - CELL_SIZE / 3);
-            ctx.lineTo((x + 1) * CELL_SIZE + CELL_SIZE / 3, (y + 1) * CELL_SIZE + CELL_SIZE / 3);
-            ctx.moveTo((x + 1) * CELL_SIZE + CELL_SIZE / 3, (y + 1) * CELL_SIZE - CELL_SIZE / 3);
-            ctx.lineTo((x + 1) * CELL_SIZE - CELL_SIZE / 3, (y + 1) * CELL_SIZE + CELL_SIZE / 3);
+            const s = CELL_SIZE / 4;
+            ctx.moveTo(cx - s, cy - s);
+            ctx.lineTo(cx + s, cy + s);
+            ctx.moveTo(cx + s, cy - s);
+            ctx.lineTo(cx - s, cy + s);
             ctx.stroke();
         }
     }
@@ -639,8 +745,18 @@ function updateHoverPoint(e) {
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
     if (clientX === undefined || clientY === undefined) return;
-    const x = Math.round(((clientX - rect.left) * scaleX) / CELL_SIZE) - 1;
-    const y = Math.round(((clientY - rect.top) * scaleY) / CELL_SIZE) - 1;
+    
+    // Correction coordonnées avec marge
+    const halfCell = CELL_SIZE / 2;
+    // (Mouse - CanvasRect.left) * scale = CanvasX
+    // CanvasX - Margin - HalfCell = GridPixels
+    // GridPixels / CELL_SIZE = GridIndex (approx)
+    
+    const canvasX = (clientX - rect.left) * scaleX;
+    const canvasY = (clientY - rect.top) * scaleY;
+    
+    const x = Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE);
+    const y = Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE);
     let isLegal;
     if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
         isLegal = isLegalMove(x, y, currentPlayer, board);
@@ -670,6 +786,8 @@ function resetGame() {
     myColor = null;
     gameId = null;
     consecutivePasses = 0;
+    lastMove = null;
+    prisoners = { black: 0, white: 0 };
     gameOver = false;
     renderBoard();
     updateScore();
@@ -703,6 +821,8 @@ function setupGameListener() {
         currentPlayer = gameData.currentPlayer || currentPlayer;
         history = gameData.history || [];
         consecutivePasses = gameData.consecutivePasses || 0;
+        lastMove = gameData.lastMove || null;
+        prisoners = gameData.prisoners || { black: 0, white: 0 };
         renderBoard();
         updateScore();
         if (gameData.status === 'playing' && !document.getElementById("gameScreen").classList.contains("active")) {
@@ -742,6 +862,14 @@ function setupGameListener() {
             } else if (!gameOver) {
                  const currentPlayerNickname = (currentPlayer === 1 && gameData.players.black) ? gameData.players.black.nickname : (currentPlayer === 2 && gameData.players.white) ? gameData.players.white.nickname : '';
                  showMessage(gameMessage, `C'est au tour de ${currentPlayerNickname}.`, "lightgreen");
+                 
+                 // Notification Tab
+                 if (myColor === currentPlayer) {
+                     document.title = "(!!!) À vous de jouer - Online Go";
+                     // Jouer son "À vous" si on veut
+                 } else {
+                     document.title = "Online Go Game";
+                 }
             }
         }
     });
@@ -996,8 +1124,13 @@ canvas.addEventListener("click", e => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const x = Math.round(((e.clientX - rect.left) * scaleX) / CELL_SIZE) - 1;
-    const y = Math.round(((e.clientY - rect.top) * scaleY) / CELL_SIZE) - 1;
+    
+    const halfCell = CELL_SIZE / 2;
+    const canvasX = (e.clientX - rect.left) * scaleX;
+    const canvasY = (e.clientY - rect.top) * scaleY;
+    
+    const x = Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE);
+    const y = Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE);
     if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
         console.log("Clic sur le canvas:", { x, y });
         playMove(x, y);
