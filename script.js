@@ -302,7 +302,7 @@ function placeStone(x, y, color, state) {
     // Vérification suicide
     const myChain = getChain(x, y, color, new Set(), newState);
     if (getLiberties(myChain, newState) === 0) {
-         return { error: "suicide" };
+        return { error: "suicide" };
     }
 
     return { newState, capturedStones };
@@ -345,7 +345,7 @@ function playMove(x, y) {
 
     // Si on arrive ici, le coup est valide
     moveInProgress = true;
-    
+
     // Jouer un son
     // soundClick.play().catch(e => {}); 
 
@@ -578,9 +578,9 @@ async function cleanUpOldGames() {
 /* ========== Gestion du Canvas (Dessin et Événements) ========== */
 function drawGrid() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Dessin du fond (déjà fait par CSS, mais on peut ajouter une teinte si besoin)
-    
+
     ctx.strokeStyle = "#5d5d5a"; // Couleur des lignes (Pierre/Encre)
     ctx.lineWidth = 1;
 
@@ -629,14 +629,14 @@ function drawGrid() {
         // Si on veut faire "Pro", 19 est en haut (index 0).
         // Faisons le mapping : Index 0 -> 1 (ou 19).
         // Pour ne pas embrouiller l'utilisateur qui clique sur (0,0), affichons 1.
-        
-        let numLabel = (i + 1).toString(); 
-        
+
+        let numLabel = (i + 1).toString();
+
         // Gauche
         ctx.fillText(numLabel, BOARD_MARGIN / 2, offsetY + i * CELL_SIZE);
         // Droite
         ctx.fillText(numLabel, canvas.width - BOARD_MARGIN / 2, offsetY + i * CELL_SIZE);
-        
+
         // Lettres (Haut et Bas)
         let charLabel = letters[i] || "";
         // Haut
@@ -658,22 +658,22 @@ function drawStones() {
 
                 ctx.beginPath();
                 ctx.arc(cx, cy, CELL_SIZE / 2.1, 0, 2 * Math.PI);
-                
+
                 // Ombre portée légère pour effet 3D
                 ctx.shadowColor = 'rgba(0,0,0,0.3)';
                 ctx.shadowBlur = 4;
                 ctx.shadowOffsetX = 2;
                 ctx.shadowOffsetY = 2;
 
-                if (board[y][x] === 1) { 
+                if (board[y][x] === 1) {
                     // Noir mat
-                    ctx.fillStyle = "#111"; 
-                } else { 
+                    ctx.fillStyle = "#111";
+                } else {
                     // Blanc coquillage (Shell)
-                    ctx.fillStyle = "#fcfcfc"; 
+                    ctx.fillStyle = "#fcfcfc";
                 }
                 ctx.fill();
-                
+
                 // Reset Ombre
                 ctx.shadowColor = 'transparent';
 
@@ -745,16 +745,16 @@ function updateHoverPoint(e) {
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
     if (clientX === undefined || clientY === undefined) return;
-    
+
     // Correction coordonnées avec marge
     const halfCell = CELL_SIZE / 2;
     // (Mouse - CanvasRect.left) * scale = CanvasX
     // CanvasX - Margin - HalfCell = GridPixels
     // GridPixels / CELL_SIZE = GridIndex (approx)
-    
+
     const canvasX = (clientX - rect.left) * scaleX;
     const canvasY = (clientY - rect.top) * scaleY;
-    
+
     const x = Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE);
     const y = Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE);
     let isLegal;
@@ -814,11 +814,13 @@ function setupGameListener() {
 
         // Mise à jour de la taille du plateau si nécessaire
         if (gameData.boardSize && gameData.boardSize !== BOARD_SIZE) {
-             updateBoardSize(gameData.boardSize);
+            updateBoardSize(gameData.boardSize);
         }
 
         board = gameData.board || board;
-        currentPlayer = gameData.currentPlayer || currentPlayer;
+        // FIX: Force le type entier pour éviter les bugs "1" !== 1
+        currentPlayer = parseInt(gameData.currentPlayer) || currentPlayer;
+
         history = gameData.history || [];
         consecutivePasses = gameData.consecutivePasses || 0;
         lastMove = gameData.lastMove || null;
@@ -826,16 +828,16 @@ function setupGameListener() {
         renderBoard();
         updateScore();
         if (gameData.status === 'playing' && !document.getElementById("gameScreen").classList.contains("active")) {
-             showScreen(gameScreen);
-             showMessage(gameMessage, "Un adversaire a rejoint ! La partie commence.", "lightgreen");
+            showScreen(gameScreen);
+            showMessage(gameMessage, "Un adversaire a rejoint ! La partie commence.", "lightgreen");
         }
         if (gameData.status === "finished" && !gameOver) {
             endGame(gameData.lastReason || "La partie est terminée.");
         }
         if (gameData.status === "playing") {
-             const blackCanPlay = canPlay(1, board);
-             const whiteCanPlay = canPlay(2, board);
-             if (!blackCanPlay && !whiteCanPlay) {
+            const blackCanPlay = canPlay(1, board);
+            const whiteCanPlay = canPlay(2, board);
+            if (!blackCanPlay && !whiteCanPlay) {
                 saveGameToFirebase({
                     gameOver: true,
                     lastReason: "La partie est bloquée. Aucun joueur ne peut plus jouer.",
@@ -848,28 +850,28 @@ function setupGameListener() {
 
         // Affichage des statuts
         if (myColor === 0) {
-             // Mode Spectateur
-             passButton.disabled = true;
-             forfeitButton.disabled = true;
-             showMessage(gameMessage, `Mode Spectateur. Tour : ${currentPlayer === 1 ? "Noir" : "Blanc"}.`, "lightblue");
+            // Mode Spectateur
+            passButton.disabled = true;
+            forfeitButton.disabled = true;
+            showMessage(gameMessage, `Mode Spectateur. Tour : ${currentPlayer === 1 ? "Noir" : "Blanc"}.`, "lightblue");
         } else {
             // Mode Joueur
             passButton.disabled = false;
             forfeitButton.disabled = false;
 
             if (gameData.status === 'waiting') {
-                 showMessage(gameMessage, "En attente d'un adversaire...", "lightblue");
+                showMessage(gameMessage, "En attente d'un adversaire...", "lightblue");
             } else if (!gameOver) {
-                 const currentPlayerNickname = (currentPlayer === 1 && gameData.players.black) ? gameData.players.black.nickname : (currentPlayer === 2 && gameData.players.white) ? gameData.players.white.nickname : '';
-                 showMessage(gameMessage, `C'est au tour de ${currentPlayerNickname}.`, "lightgreen");
-                 
-                 // Notification Tab
-                 if (myColor === currentPlayer) {
-                     document.title = "(!!!) À vous de jouer - Online Go";
-                     // Jouer son "À vous" si on veut
-                 } else {
-                     document.title = "Online Go Game";
-                 }
+                const currentPlayerNickname = (currentPlayer === 1 && gameData.players.black) ? gameData.players.black.nickname : (currentPlayer === 2 && gameData.players.white) ? gameData.players.white.nickname : '';
+                showMessage(gameMessage, `C'est au tour de ${currentPlayerNickname}.`, "lightgreen");
+
+                // Notification Tab
+                if (myColor === currentPlayer) {
+                    document.title = "(!!!) À vous de jouer - Online Go";
+                    // Jouer son "À vous" si on veut
+                } else {
+                    document.title = "Online Go Game";
+                }
             }
         }
     });
@@ -1017,20 +1019,20 @@ async function joinGame(targetGameId = null) {
         // Logique Joueur vs Spectateur
         if (gameData.status === 'waiting' && !gameData.players.white) {
             // Rejoindre en tant que joueur Blanc
-             await gameRef.update({
+            await gameRef.update({
                 'players/white': { uid: myUid, email: auth.currentUser.email, nickname: myNickname },
                 status: 'playing'
             });
             myColor = 2;
             showMessage(gameMessage, "Partie rejointe ! Vous êtes Blanc.", "lightgreen");
         } else if (gameData.players.black.uid === myUid) {
-             // Reconnexion joueur Noir
-             myColor = 1;
-             showMessage(gameMessage, "Retour dans la partie (Noir).", "lightgreen");
+            // Reconnexion joueur Noir
+            myColor = 1;
+            showMessage(gameMessage, "Retour dans la partie (Noir).", "lightgreen");
         } else if (gameData.players.white && gameData.players.white.uid === myUid) {
-             // Reconnexion joueur Blanc
-             myColor = 2;
-             showMessage(gameMessage, "Retour dans la partie (Blanc).", "lightgreen");
+            // Reconnexion joueur Blanc
+            myColor = 2;
+            showMessage(gameMessage, "Retour dans la partie (Blanc).", "lightgreen");
         } else {
             // Mode Spectateur
             myColor = 0;
@@ -1124,11 +1126,11 @@ canvas.addEventListener("click", e => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    
+
     const halfCell = CELL_SIZE / 2;
     const canvasX = (e.clientX - rect.left) * scaleX;
     const canvasY = (e.clientY - rect.top) * scaleY;
-    
+
     const x = Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE);
     const y = Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE);
     if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
@@ -1158,4 +1160,10 @@ forfeitButton.onclick = () => {
         resign();
     }
 };
+// FIX: Ajout de l'écouteur pour le bouton Copier
+copyLinkBtn.onclick = () => {
+    const code = gameLinkDisplay.textContent;
+    copyToClipboard(code);
+};
+
 init();
