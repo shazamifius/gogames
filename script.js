@@ -166,7 +166,7 @@ const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { ur
 function setupDataChannelLocal(channel) {
     dataChannel = channel;
     dataChannel.onmessage = e => {
-        try { const msg = JSON.parse(e.data); }
+        try { JSON.parse(e.data); }
         catch (err) { console.error("Message invalide sur le dataChannel", err); }
     };
     dataChannel.onopen = () => { showMessage(gameMessage, "Connexion établie (WebRTC).", "lightgreen"); };
@@ -729,30 +729,37 @@ async function cleanUpOldGames() {
     const cutoff = Date.now() - FORTY_TWO_HOURS;
 
     try {
-        // On lit uniquement lastUpdateAt + createdAt (shallow read par champ indexé)
-        // orderByChild + endAt = seulement les parties dont createdAt est trop vieux
-        const oldByCreation = await db.ref('games')
+        const snapshot = await db.ref('games')
             .orderByChild('createdAt')
             .endAt(cutoff)
             .once('value');
 
+        if (!snapshot.exists()) return;
+
+        let deleted = 0, blocked = 0;
         const deletes = [];
-        oldByCreation.forEach(snap => {
+
+        snapshot.forEach(snap => {
             const g = snap.val();
-            // Vérification secondaire : si lastUpdateAt existe et est récent, on garde
             const lastActivity = g.lastUpdateAt || g.createdAt || 0;
             if (lastActivity < cutoff) {
-                deletes.push(db.ref(`games/${snap.key}`).remove().catch(() => {}));
+                deletes.push(
+                    db.ref(`games/${snap.key}`).remove()
+                        .then(() => { deleted++; })
+                        .catch(err => {
+                            blocked++;
+                            console.warn(`[Cleanup] Impossible de supprimer la partie ${snap.key} :`, err.code || err.message);
+                        })
+                );
             }
         });
 
-        if (deletes.length > 0) {
-            await Promise.all(deletes);
-            console.log(`${deletes.length} vieille(s) partie(s) nettoyée(s).`);
-        }
+        await Promise.all(deletes);
+        if (deleted > 0) console.log(`[Cleanup] ${deleted} vieille(s) partie(s) supprimée(s).`);
+        if (blocked > 0) console.warn(`[Cleanup] ${blocked} partie(s) non supprimée(s) — vérifier les règles Firebase.`);
+
     } catch (err) {
-        // Silencieux : l'utilisateur n'a pas besoin de voir les erreurs de nettoyage
-        console.warn("Nettoyage Firebase :", err.message);
+        console.warn("[Cleanup] Erreur :", err.code || err.message);
     }
 }
 
@@ -1095,7 +1102,7 @@ function setupGameListener() {
     });
 }
 function setupClipboardDetection() {
-    window.addEventListener('paste', async (event) => {
+    window.addEventListener('paste', async () => {
         if (!lobbyScreen.classList.contains("active")) return;
         try {
             const clipboardText = await navigator.clipboard.readText();
@@ -1223,7 +1230,7 @@ createGameBtn.onclick = async () => {
             publicGameNote.style.display = "none";
         }
 
-        await copyToClipboard(gameId);
+        copyToClipboard(gameId);
         setupGameListener();
     } catch (e) {
         console.error("Erreur lors de la création de la partie :", e);
