@@ -567,8 +567,14 @@ select option {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 640px;
+  /* La largeur max suit celle du board (carré, donc limitée par la hauteur aussi) */
+  max-width: min(640px, calc(100svh - 260px));
   gap: 10px;
+}
+
+/* Les panneaux joueurs s'alignent exactement sur la largeur du plateau */
+.game-layout .player-panel {
+  width: 100%;
 }
 
 /* ========== Player Panels ========== */
@@ -655,7 +661,10 @@ select option {
 .board-wrapper {
   position: relative;
   overflow: hidden;
+  /* Carré parfait : prend toute la largeur disponible sans dépasser la hauteur utile */
   width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: min(100%, calc(100svh - 260px));
   border-radius: var(--radius-sm);
   cursor: crosshair;
   touch-action: none;
@@ -663,13 +672,7 @@ select option {
   -webkit-user-select: none;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
   border: 2px solid #5d4037;
-}
-
-/* Ratio 1:1 pour le wrapper */
-.board-wrapper::before {
-  content: '';
-  display: block;
-  padding-top: 100%;
+  align-self: center;
 }
 
 #goBoard {
@@ -682,10 +685,7 @@ select option {
   display: block;
   cursor: crosshair;
   background-color: #3e2723;
-  background-image:
-    repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(0,0,0,0.03) 29px, rgba(0,0,0,0.03) 30px),
-    repeating-linear-gradient(90deg, transparent, transparent 29px, rgba(0,0,0,0.03) 29px, rgba(0,0,0,0.03) 30px),
-    radial-gradient(ellipse at 20% 20%, #4e342e 0%, #3e2723 60%, #2d1b16 100%);
+  background-image: radial-gradient(ellipse at 25% 25%, #4e342e 0%, #3e2723 55%, #2d1b16 100%);
 }
 
 /* Zoom hint */
@@ -714,7 +714,7 @@ select option {
   display: flex;
   gap: 16px;
   width: 100%;
-  max-width: 640px;
+  max-width: min(640px, calc(100svh - 260px));
   margin-top: 6px;
 }
 
