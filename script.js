@@ -727,41 +727,60 @@ async function generateGameId() {
 async function cleanUpOldGames() {
     const FORTY_TWO_HOURS = 42 * 60 * 60 * 1000;
     const cutoff = Date.now() - FORTY_TWO_HOURS;
+    const cutoffDate = new Date(cutoff).toLocaleString('fr-FR');
+    const authUser = auth.currentUser;
+    console.log(`%c[Cleanup] Démarrage — seuil: ${cutoffDate} — uid: ${authUser ? authUser.uid : 'NON CONNECTÉ'}`, 'color: #c5a065');
 
     try {
-        const snapshot = await db.ref('games')
-            .orderByChild('createdAt')
-            .endAt(cutoff)
-            .once('value');
+        const snapshot = await db.ref('games').once('value');
 
-        if (!snapshot.exists()) return;
+        if (!snapshot.exists()) {
+            console.log('[Cleanup] Aucune partie en base.');
+            return;
+        }
 
-        let deleted = 0, blocked = 0;
-        const deletes = [];
-
+        const toDelete = [];
         snapshot.forEach(snap => {
             const g = snap.val();
-            const lastActivity = g.lastUpdateAt || g.createdAt || 0;
-            if (lastActivity < cutoff) {
-                deletes.push(
-                    db.ref(`games/${snap.key}`).remove()
-                        .then(() => { deleted++; })
-                        .catch(err => {
-                            blocked++;
-                            console.warn(`[Cleanup] Impossible de supprimer la partie ${snap.key} :`, err.code || err.message);
-                        })
-                );
-            }
+            const createdAt = g.createdAt || 0;
+            const lastUpdateAt = g.lastUpdateAt || 0;
+            const ageCreated = ((Date.now() - createdAt) / 3600000).toFixed(0);
+            const ageUpdated = lastUpdateAt ? ((Date.now() - lastUpdateAt) / 3600000).toFixed(0) : 'N/A';
+            const shouldDelete = createdAt > 0 && createdAt < cutoff;
+            console.log(
+                `[Cleanup] Partie ${snap.key}: créé il y a ${ageCreated}h, màj il y a ${ageUpdated}h (status: ${g.status}) → ${shouldDelete ? '🗑 à supprimer' : '✓ garde'}`,
+                shouldDelete ? 'color: #ff5252' : 'color: #aaa', ''
+            );
+            if (shouldDelete) toDelete.push({ key: snap.key, createdAt });
         });
 
-        await Promise.all(deletes);
-        if (deleted > 0) console.log(`[Cleanup] ${deleted} vieille(s) partie(s) supprimée(s).`);
-        if (blocked > 0) console.warn(`[Cleanup] ${blocked} partie(s) non supprimée(s) — vérifier les règles Firebase.`);
+        console.log(`[Cleanup] ${toDelete.length} à supprimer sur ${snapshot.numChildren()} total.`);
+
+        let deleted = 0, blocked = 0;
+        for (const { key, createdAt } of toDelete) {
+            console.log(`[Cleanup] Tentative suppression ${key} (createdAt=${createdAt}, seuil=${cutoff}, delta=${cutoff - createdAt}ms)...`);
+            try {
+                await db.ref(`games/${key}`).set(null);
+                deleted++;
+                console.log(`%c[Cleanup] ✓ Partie ${key} supprimée`, 'color: #4caf50');
+            } catch (err) {
+                blocked++;
+                console.error(`[Cleanup] ✗ Partie ${key} BLOQUÉE — code: ${err.code} — msg: ${err.message}`);
+                // Vérifier si la partie existe encore
+                const check = await db.ref(`games/${key}`).once('value');
+                console.log(`[Cleanup]   ↳ La partie existe encore: ${check.exists()}`);
+            }
+        }
+
+        console.log(`%c[Cleanup] Terminé: ${deleted} supprimée(s), ${blocked} bloquée(s)`, 'color: #c5a065; font-weight: bold');
 
     } catch (err) {
-        console.warn("[Cleanup] Erreur :", err.code || err.message);
+        console.error('[Cleanup] Erreur fatale:', err.code, err.message);
     }
 }
+
+// Expose dans la console du navigateur pour tests manuels
+window.goCleanup = cleanUpOldGames;
 
 
 /* ========== Gestion du Canvas (Dessin et Événements) ========== */
@@ -1126,7 +1145,6 @@ function init() {
     setupClipboardDetection();
     renderBoard();
     updateScore();
-    cleanUpOldGames();
     fetchPublicGames();
 }
 
@@ -1184,6 +1202,7 @@ auth.onAuthStateChanged(async user => {
         else {
             updatePlayerInfoDisplay();
             showScreen(lobbyScreen);
+            cleanUpOldGames();
         }
     } else {
         myUid = null;
