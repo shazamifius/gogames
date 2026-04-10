@@ -577,12 +577,13 @@ function resign() {
 
 
 
-function animateWin(winnerNickname, message) {
+function animateWin(winnerNickname, message, winnerColor) {
     endGameOverlay.classList.add("active");
     endGameMessageEl.textContent = message || `${winnerNickname} a gagné !`;
 
-    // Démarre l'animation de confettis uniquement pour le gagnant
-    if (winnerNickname && myNickname === winnerNickname) {
+    // Confettis uniquement pour le joueur gagnant (comparaison par couleur, pas par pseudo)
+    const iAmWinner = winnerColor !== 0 && myColor === winnerColor;
+    if (iAmWinner) {
         const duration = 5 * 1000;
         const end = Date.now() + duration;
 
@@ -641,37 +642,36 @@ async function endGame(message) {
         const whiteNickname = gameData.players.white ? gameData.players.white.nickname : "Joueur Blanc";
 
         let winnerNickname = "";
+        let winnerColor = 0; // 0 = nul, 1 = noir, 2 = blanc
         let finalMessage = "";
 
         // Logique de détermination du message final
         if (message && message.includes("gagne par abandon")) {
-            // Cas 1: Un joueur a abandonné
-            winnerNickname = message.includes("Blanc") ? whiteNickname : blackNickname;
+            winnerColor = message.includes("Blanc") ? 2 : 1;
+            winnerNickname = winnerColor === 2 ? whiteNickname : blackNickname;
             finalMessage = message;
 
         } else if (message && message.includes("Double passe")) {
-            // Cas 2: Double passe — le message contient déjà le résultat calculé
             finalMessage = message;
-            if (message.includes("Noir gagne")) winnerNickname = blackNickname;
-            else if (message.includes("Blanc gagne")) winnerNickname = whiteNickname;
+            if (message.includes("Noir gagne")) { winnerColor = 1; winnerNickname = blackNickname; }
+            else if (message.includes("Blanc gagne")) { winnerColor = 2; winnerNickname = whiteNickname; }
 
         } else {
-            // Cas 3: Blocage ou autre — recalcul du score
             const { black, white } = computeScore(board);
-
             if (black > white) {
+                winnerColor = 1;
                 winnerNickname = blackNickname;
-                finalMessage = `${winnerNickname} gagne avec ${(black - white).toFixed(1)} points d'avance !`;
+                finalMessage = `${winnerNickname} gagne avec ${(black - white).toFixed(1)} points d’avance !`;
             } else if (white > black) {
+                winnerColor = 2;
                 winnerNickname = whiteNickname;
-                finalMessage = `${winnerNickname} gagne avec ${(white - black).toFixed(1)} points d'avance !`;
+                finalMessage = `${winnerNickname} gagne avec ${(white - black).toFixed(1)} points d’avance !`;
             } else {
                 finalMessage = "La partie est nulle !";
             }
         }
 
-        // Lance l’animation avec le message final déterminé
-        animateWin(winnerNickname, finalMessage);
+        animateWin(winnerNickname, finalMessage, winnerColor);
 
         passButton.disabled = true;
         forfeitButton.disabled = true;
@@ -679,20 +679,12 @@ async function endGame(message) {
 
         // Mise à jour des stats si on est un joueur
         if (myColor === 1 || myColor === 2) {
-            // Calcul du score final pour stats
             const { black, white } = computeScore(board);
             let myScore = (myColor === 1) ? black : white;
-            let isWinner = (myColor === 1 && black > white) || (myColor === 2 && white > black);
-            // Cas spécial abandon
-            if (message && message.includes("gagne par abandon")) {
-                if (message.includes(myNickname)) {
-                    isWinner = true;
-                    myScore += 20; // Bonus score pour victoire par abandon
-                } else {
-                    isWinner = false;
-                }
+            const isWinner = myColor === winnerColor;
+            if (isWinner && message && message.includes("gagne par abandon")) {
+                myScore += 20; // Bonus pour victoire par abandon
             }
-
             updateMyStats(isWinner, myScore);
         }
 
@@ -733,40 +725,34 @@ async function generateGameId() {
     return newId.toString();
 }
 async function cleanUpOldGames() {
-    const gamesRef = db.ref('games');
-    const now = Date.now();
-    const fortyEightHoursInMs = 42 * 60 * 60 * 1000; // 42 heures
+    const FORTY_TWO_HOURS = 42 * 60 * 60 * 1000;
+    const cutoff = Date.now() - FORTY_TWO_HOURS;
 
     try {
-        const snapshot = await gamesRef.once('value');
-        if (snapshot.exists()) {
-            const games = snapshot.val();
-            let gamesDeletedCount = 0;
+        // On lit uniquement lastUpdateAt + createdAt (shallow read par champ indexé)
+        // orderByChild + endAt = seulement les parties dont createdAt est trop vieux
+        const oldByCreation = await db.ref('games')
+            .orderByChild('createdAt')
+            .endAt(cutoff)
+            .once('value');
 
-            for (const gameId in games) {
-                const game = games[gameId];
-                const lastActivity = game.lastUpdateAt || game.createdAt;
-
-                // La règle de sécurité est la source de vérité, mais on filtre ici pour l'affichage
-                if (lastActivity && (now - lastActivity > fortyEightHoursInMs)) {
-                    try {
-                        await db.ref(`games/${gameId}`).remove();
-                        console.log(`Partie ${gameId} supprimée (plus de 48h d'inactivité).`);
-                        gamesDeletedCount++;
-                    } catch (err) {
-                        // Le client peut échouer si la règle de sécurité est plus stricte
-                        // Ce n'est pas une erreur critique, juste une tentative de nettoyage
-                        console.warn(`Nettoyage de la partie ${gameId} bloqué par les règles de sécurité (ce qui est normal si elle est active).`);
-                    }
-                }
+        const deletes = [];
+        oldByCreation.forEach(snap => {
+            const g = snap.val();
+            // Vérification secondaire : si lastUpdateAt existe et est récent, on garde
+            const lastActivity = g.lastUpdateAt || g.createdAt || 0;
+            if (lastActivity < cutoff) {
+                deletes.push(db.ref(`games/${snap.key}`).remove().catch(() => {}));
             }
+        });
 
-            if (gamesDeletedCount > 0) {
-                console.log(`${gamesDeletedCount} vieilles parties ont été nettoyées.`);
-            }
+        if (deletes.length > 0) {
+            await Promise.all(deletes);
+            console.log(`${deletes.length} vieille(s) partie(s) nettoyée(s).`);
         }
-    } catch (error) {
-        console.error("Erreur lors du nettoyage des vieilles parties:", error);
+    } catch (err) {
+        // Silencieux : l'utilisateur n'a pas besoin de voir les erreurs de nettoyage
+        console.warn("Nettoyage Firebase :", err.message);
     }
 }
 
