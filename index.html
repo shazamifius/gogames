@@ -102,15 +102,61 @@
     </div>
 
     <div id="gameScreen" class="screen">
-      <div class="score-container">
-        <div id="blackScore" class="player-score">Noir: 0</div>
-        <div id="whiteScore" class="player-score">Blanc: 0</div>
+      <div class="game-layout">
+
+        <!-- Panel Joueur Noir -->
+        <div class="player-panel" id="blackPanel">
+          <div class="panel-stone black-stone-icon"></div>
+          <div class="panel-info">
+            <span class="panel-name" id="blackPlayerName">Noir</span>
+            <span class="panel-sub" id="blackCapturesText">0 captures</span>
+          </div>
+          <div class="turn-dot" id="blackTurnDot"></div>
+        </div>
+
+        <!-- Plateau de jeu avec zoom/pan -->
+        <div class="board-wrapper" id="boardWrapper">
+          <canvas id="goBoard" width="600" height="600"></canvas>
+          <div class="zoom-hint" id="zoomHint">
+            <span>🖱 Molette pour zoomer · Glisser pour naviguer</span>
+          </div>
+        </div>
+
+        <!-- Panel Joueur Blanc -->
+        <div class="player-panel" id="whitePanel">
+          <div class="panel-stone white-stone-icon"></div>
+          <div class="panel-info">
+            <span class="panel-name" id="whitePlayerName">Blanc</span>
+            <span class="panel-sub" id="whiteCapturesText">0 captures · Komi 7.5</span>
+          </div>
+          <div class="turn-dot" id="whiteTurnDot"></div>
+        </div>
+
       </div>
-      <canvas id="goBoard" width="600" height="600"></canvas>
+
       <p id="gameStatus" class="message"></p>
+
+      <!-- Confirmation de coup (mobile) -->
+      <div id="confirmMoveUI" class="confirm-move-ui" style="display:none;">
+        <button id="confirmMoveBtn" class="btn-confirm">✓ Jouer</button>
+        <button id="cancelMoveBtn" class="btn-cancel">✗ Annuler</button>
+      </div>
+
       <div class="controls">
         <button id="passButton">Passer</button>
         <button id="forfeitButton">Abandonner</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal confirmation abandon -->
+  <div id="resignModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <h3>Abandonner la partie ?</h3>
+      <p>Cette action est irréversible.</p>
+      <div class="modal-buttons">
+        <button id="confirmResignBtn" class="btn-danger">Oui, abandonner</button>
+        <button id="cancelResignBtn">Non, continuer</button>
       </div>
     </div>
   </div>
