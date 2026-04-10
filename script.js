@@ -44,15 +44,34 @@ const copyLinkBtn = document.getElementById("copyLinkBtn");
 const lobbyMessage = document.getElementById("lobbyMessage");
 const canvas = document.getElementById("goBoard");
 const ctx = canvas.getContext("2d");
+const boardWrapper = document.getElementById("boardWrapper");
 const passButton = document.getElementById("passButton");
 const forfeitButton = document.getElementById("forfeitButton");
 const gameMessage = document.getElementById("gameStatus");
-const blackScoreEl = document.getElementById("blackScore");
-const whiteScoreEl = document.getElementById("whiteScore");
 const playerInfo = document.getElementById("playerInfo");
 const endGameOverlay = document.getElementById("endGameOverlay");
 const endGameMessageEl = document.getElementById("endGameMessage");
 const endGameCountdownEl = document.getElementById("endGameCountdown");
+
+// Player panels
+const blackPlayerNameEl = document.getElementById("blackPlayerName");
+const whitePlayerNameEl = document.getElementById("whitePlayerName");
+const blackCapturesEl = document.getElementById("blackCapturesText");
+const whiteCapturesEl = document.getElementById("whiteCapturesText");
+const blackTurnDot = document.getElementById("blackTurnDot");
+const whiteTurnDot = document.getElementById("whiteTurnDot");
+const blackPanel = document.getElementById("blackPanel");
+const whitePanel = document.getElementById("whitePanel");
+
+// Confirm move UI (mobile)
+const confirmMoveUI = document.getElementById("confirmMoveUI");
+const confirmMoveBtn = document.getElementById("confirmMoveBtn");
+const cancelMoveBtn = document.getElementById("cancelMoveBtn");
+
+// Resign modal
+const resignModal = document.getElementById("resignModal");
+const confirmResignBtn = document.getElementById("confirmResignBtn");
+const cancelResignBtn = document.getElementById("cancelResignBtn");
 
 const boardSizeSelect = document.getElementById("boardSizeSelect");
 const publicGameCheckbox = document.getElementById("publicGameCheckbox");
@@ -84,6 +103,51 @@ let gameListener = null;
 let moveInProgress = false;
 let lastMove = null; // {x, y}
 let prisoners = { black: 0, white: 0 };
+let pendingMove = null; // {x, y} — coup en attente de confirmation (mobile)
+
+// ========== Viewport (Zoom / Pan) ==========
+const viewport = { x: 0, y: 0, scale: 1, minScale: 1, maxScale: 5 };
+
+function applyViewport() {
+    canvas.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
+}
+
+function clampViewport() {
+    // Ne pas laisser le plateau sortir du wrapper
+    const ww = boardWrapper.offsetWidth;
+    const wh = boardWrapper.offsetHeight;
+    const scaledW = ww * viewport.scale;
+    const scaledH = wh * viewport.scale;
+    viewport.x = Math.min(0, Math.max(viewport.x, ww - scaledW));
+    viewport.y = Math.min(0, Math.max(viewport.y, wh - scaledH));
+}
+
+function resetViewport() {
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.scale = 1;
+    applyViewport();
+}
+
+// Convertit des coordonnées écran (client) en coordonnées du plateau
+function clientToBoard(clientX, clientY) {
+    const wrapperRect = boardWrapper.getBoundingClientRect();
+    const wx = clientX - wrapperRect.left;
+    const wy = clientY - wrapperRect.top;
+    // Inverse de la CSS transform (translate puis scale, origin 0,0)
+    const cssX = (wx - viewport.x) / viewport.scale;
+    const cssY = (wy - viewport.y) / viewport.scale;
+    // CSS→résolution canvas (le canvas est width/height 100% du wrapper)
+    const resX = canvas.width / wrapperRect.width;
+    const resY = canvas.height / wrapperRect.height;
+    const canvasX = cssX * resX;
+    const canvasY = cssY * resY;
+    const halfCell = CELL_SIZE / 2;
+    return {
+        x: Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE),
+        y: Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE)
+    };
+}
 
 // Sons (Base64 courtes pour ne pas dépendre de fichiers externes)
 const soundClick = new Audio("data:audio/mp3;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAG1xUAALD+AAXG1lQiNzY0E0UAAQAAgAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAgAAAAAAg");
@@ -177,7 +241,11 @@ function showScreen(screen) {
     [authScreen, nicknameScreen, lobbyScreen, gameScreen].forEach(s => s.classList.remove("active"));
     screen.classList.add("active");
     if (screen === lobbyScreen) {
-        fetchPublicGames(); // Rafraîchir la liste en arrivant sur le lobby
+        fetchPublicGames();
+    }
+    if (screen === gameScreen) {
+        resetViewport();
+        renderBoard();
     }
 }
 function showMessage(el, text, color = "#bbb") {
@@ -260,11 +328,9 @@ function copyToClipboard(text) {
         });
 }
 
-// Mise à jour de la taille du plateau et des cellules
-// Mise à jour de la taille du plateau et des cellules
 function updateBoardSize(size) {
     BOARD_SIZE = parseInt(size);
-    // On laisse de la place pour les coordonnées (BOARD_SIZE + 2 cases virtuelles)
+    // Canvas est toujours 600×600 en résolution interne ; CSS gère l'affichage
     CELL_SIZE = (canvas.width - 2 * BOARD_MARGIN) / BOARD_SIZE;
     board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
 }
@@ -335,11 +401,38 @@ function computeScore(state) {
     return { black, white };
 }
 function updateScore() {
-    const { black, white } = computeScore(board);
-    // Score Total = Territoire + Prisonniers + (Komi pour Blanc)
-    // Ici calcul simplifié territoire uniquement, on ajoute l'affichage prisonniers
-    blackScoreEl.innerHTML = `Noir<br><span style="font-size:0.8em">Captures: ${prisoners.black}</span>`;
-    whiteScoreEl.innerHTML = `Blanc<br><span style="font-size:0.8em">Captures: ${prisoners.white} • Komi: ${KOMI}</span>`;
+    if (blackCapturesEl) blackCapturesEl.textContent = `${prisoners.black} capture${prisoners.black !== 1 ? 's' : ''}`;
+    if (whiteCapturesEl) whiteCapturesEl.textContent = `${prisoners.white} capture${prisoners.white !== 1 ? 's' : ''} · Komi ${KOMI}`;
+}
+
+function updatePlayerPanels(gameData) {
+    if (!gameData || !gameData.players) return;
+    const blackNick = gameData.players.black ? gameData.players.black.nickname : "Noir";
+    const whiteNick = gameData.players.white ? gameData.players.white.nickname : "En attente...";
+    if (blackPlayerNameEl) blackPlayerNameEl.textContent = blackNick;
+    if (whitePlayerNameEl) whitePlayerNameEl.textContent = whiteNick;
+}
+
+function updateTurnIndicators() {
+    if (!blackTurnDot || !whiteTurnDot) return;
+    if (gameOver || myColor === 0) {
+        blackTurnDot.classList.remove('active');
+        whiteTurnDot.classList.remove('active');
+        blackPanel.classList.remove('active-turn');
+        whitePanel.classList.remove('active-turn');
+        return;
+    }
+    if (currentPlayer === 1) {
+        blackTurnDot.classList.add('active');
+        whiteTurnDot.classList.remove('active');
+        blackPanel.classList.add('active-turn');
+        whitePanel.classList.remove('active-turn');
+    } else {
+        whiteTurnDot.classList.add('active');
+        blackTurnDot.classList.remove('active');
+        whitePanel.classList.add('active-turn');
+        blackPanel.classList.remove('active-turn');
+    }
 }
 function canPlay(playerColor, boardState) {
     for (let y = 0; y < BOARD_SIZE; y++) {
@@ -441,10 +534,20 @@ function passTurn() {
     const nextPasses = consecutivePasses + 1;
 
     if (nextPasses >= 2) {
-        const message = "Les deux joueurs ont passé consécutivement.";
+        const { black, white } = computeScore(board);
+        let winnerMsg;
+        if (black > white) {
+            winnerMsg = `Noir gagne avec ${(black - white).toFixed(1)} pts d'avance !`;
+        } else if (white > black) {
+            winnerMsg = `Blanc gagne avec ${(white - black).toFixed(1)} pts d'avance !`;
+        } else {
+            winnerMsg = "Partie nulle !";
+        }
+        const endReason = `Double passe. ${winnerMsg}`;
         saveGameToFirebase({
-            gameOver: true,
-            lastReason: message,
+            consecutivePasses: nextPasses,
+            board: board,
+            lastReason: endReason,
             status: "finished"
         });
     } else {
@@ -540,14 +643,20 @@ async function endGame(message) {
         let winnerNickname = "";
         let finalMessage = "";
 
-        // Logique de détermination du message final plus robuste
+        // Logique de détermination du message final
         if (message && message.includes("gagne par abandon")) {
             // Cas 1: Un joueur a abandonné
             winnerNickname = message.includes("Blanc") ? whiteNickname : blackNickname;
-            finalMessage = message; // Le message est déjà complet (ex: "Le joueur Blanc gagne par abandon.")
+            finalMessage = message;
+
+        } else if (message && message.includes("Double passe")) {
+            // Cas 2: Double passe — le message contient déjà le résultat calculé
+            finalMessage = message;
+            if (message.includes("Noir gagne")) winnerNickname = blackNickname;
+            else if (message.includes("Blanc gagne")) winnerNickname = whiteNickname;
 
         } else {
-            // Cas 2: Double passe, blocage, ou autre fin par score
+            // Cas 3: Blocage ou autre — recalcul du score
             const { black, white } = computeScore(board);
 
             if (black > white) {
@@ -564,9 +673,9 @@ async function endGame(message) {
         // Lance l’animation avec le message final déterminé
         animateWin(winnerNickname, finalMessage);
 
-        // Désactive les boutons de jeu
         passButton.disabled = true;
         forfeitButton.disabled = true;
+        updateTurnIndicators();
 
         // Mise à jour des stats si on est un joueur
         if (myColor === 1 || myColor === 2) {
@@ -626,7 +735,7 @@ async function generateGameId() {
 async function cleanUpOldGames() {
     const gamesRef = db.ref('games');
     const now = Date.now();
-    const fortyEightHoursInMs = 48 * 60 * 60 * 1000; // 48 heures
+    const fortyEightHoursInMs = 42 * 60 * 60 * 1000; // 42 heures
 
     try {
         const snapshot = await gamesRef.once('value');
@@ -797,11 +906,34 @@ function drawStones() {
     }
 }
 function drawHoverPoint() {
+    const halfCell = CELL_SIZE / 2;
+    const offsetX = BOARD_MARGIN + halfCell;
+    const offsetY = BOARD_MARGIN + halfCell;
+
+    // Dessin du coup en attente de confirmation (mobile) — prioritaire
+    if (pendingMove) {
+        const cx = offsetX + pendingMove.x * CELL_SIZE;
+        const cy = offsetY + pendingMove.y * CELL_SIZE;
+        const radius = CELL_SIZE / 2.15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+        if (myColor === 1) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        }
+        ctx.fill();
+        // Halo pulsant pour indiquer l'attente
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 3, 0, 2 * Math.PI);
+        ctx.strokeStyle = myColor === 1 ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        return;
+    }
+
     if (hoverPoint) {
         const [x, y, isLegal] = hoverPoint;
-        const halfCell = CELL_SIZE / 2;
-        const offsetX = BOARD_MARGIN + halfCell;
-        const offsetY = BOARD_MARGIN + halfCell;
         const cx = offsetX + x * CELL_SIZE;
         const cy = offsetY + y * CELL_SIZE;
 
@@ -811,7 +943,6 @@ function drawHoverPoint() {
             ctx.arc(cx, cy, CELL_SIZE / 2.2, 0, 2 * Math.PI);
             ctx.fill();
         } else {
-            // Croix rouge discrète
             ctx.strokeStyle = 'rgba(200, 50, 50, 0.6)';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -835,24 +966,11 @@ function updateHoverPoint(e) {
         renderBoard();
         return;
     }
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : undefined);
+    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : undefined);
     if (clientX === undefined || clientY === undefined) return;
 
-    // Correction coordonnées avec marge
-    const halfCell = CELL_SIZE / 2;
-    // (Mouse - CanvasRect.left) * scale = CanvasX
-    // CanvasX - Margin - HalfCell = GridPixels
-    // GridPixels / CELL_SIZE = GridIndex (approx)
-
-    const canvasX = (clientX - rect.left) * scaleX;
-    const canvasY = (clientY - rect.top) * scaleY;
-
-    const x = Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE);
-    const y = Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE);
+    const { x, y } = clientToBoard(clientX, clientY);
     let isLegal;
     if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
         isLegal = isLegalMove(x, y, currentPlayer, board);
@@ -876,7 +994,7 @@ function resetGame() {
     if (peerConnection) try { peerConnection.close(); } catch (e) { }
     dataChannel = null;
     peerConnection = null;
-    updateBoardSize(BOARD_SIZE); // Reset board
+    updateBoardSize(BOARD_SIZE);
     history = [];
     currentPlayer = 1;
     myColor = null;
@@ -885,6 +1003,9 @@ function resetGame() {
     lastMove = null;
     prisoners = { black: 0, white: 0 };
     gameOver = false;
+    pendingMove = null;
+    if (confirmMoveUI) confirmMoveUI.style.display = 'none';
+    resetViewport();
     renderBoard();
     updateScore();
 }
@@ -923,25 +1044,40 @@ function setupGameListener() {
         prisoners = gameData.prisoners || { black: 0, white: 0 };
         renderBoard();
         updateScore();
+        updateTurnIndicators();
+        updatePlayerPanels(gameData);
         if (gameData.status === 'playing' && !document.getElementById("gameScreen").classList.contains("active")) {
             showScreen(gameScreen);
             showMessage(gameMessage, "Un adversaire a rejoint ! La partie commence.", "lightgreen");
         }
         if (gameData.status === "finished" && !gameOver) {
             endGame(gameData.lastReason || "La partie est terminée.");
+            return;
         }
         if (gameData.status === "playing") {
+            // Filet de sécurité : double passe pas encore traitée côté serveur
+            if (consecutivePasses >= 2 && !gameOver && myColor !== 0) {
+                const { black, white } = computeScore(board);
+                let winnerMsg;
+                if (black > white) winnerMsg = `Noir gagne avec ${(black - white).toFixed(1)} pts d'avance !`;
+                else if (white > black) winnerMsg = `Blanc gagne avec ${(white - black).toFixed(1)} pts d'avance !`;
+                else winnerMsg = "Partie nulle !";
+                saveGameToFirebase({
+                    board: board,
+                    lastReason: `Double passe. ${winnerMsg}`,
+                    status: "finished"
+                });
+                return;
+            }
             const blackCanPlay = canPlay(1, board);
             const whiteCanPlay = canPlay(2, board);
             if (!blackCanPlay && !whiteCanPlay) {
                 saveGameToFirebase({
-                    gameOver: true,
                     lastReason: "La partie est bloquée. Aucun joueur ne peut plus jouer.",
                     status: "finished"
                 });
                 return;
             }
-
         }
 
         // Affichage des statuts
@@ -1165,6 +1301,36 @@ async function joinGame(targetGameId = null) {
 }
 joinGameBtn.onclick = () => joinGame();
 
+/* ========== Regarder une partie (mode spectateur uniquement) ========== */
+async function spectateGame(targetGameId) {
+    gameRef = db.ref('games/' + targetGameId);
+    showMessage(lobbyMessage, "Connexion en mode spectateur...", "lightblue");
+
+    try {
+        const snapshot = await gameRef.once('value');
+        const gameData = snapshot.val();
+
+        if (!gameData) {
+            showMessage(lobbyMessage, "Partie introuvable.", "red");
+            gameRef = null;
+            return;
+        }
+
+        gameId = targetGameId;
+        if (gameData.boardSize) updateBoardSize(gameData.boardSize);
+        else updateBoardSize(19);
+
+        myColor = 0; // Toujours spectateur, jamais joueur
+        setupGameListener();
+        showScreen(gameScreen);
+        showMessage(gameMessage, "Mode Spectateur activé.", "lightblue");
+
+    } catch (error) {
+        console.error("Erreur spectateur:", error);
+        showMessage(lobbyMessage, "Erreur de connexion spectateur.", "red");
+    }
+}
+
 /* ========== Matchmaking & Liste des parties ========== */
 function formatTime(timestamp) {
     const diff = Date.now() - timestamp;
@@ -1224,12 +1390,16 @@ function renderGameList(games, container, actionLabel) {
         const size = game.boardSize || 19;
         const time = formatTime(game.createdAt);
 
+        const onclickAction = actionLabel === "Regarder"
+            ? `spectateGame('${game.id}')`
+            : `joinGame('${game.id}')`;
+
         item.innerHTML = `
             <div class="game-item-info">
                 <div class="game-item-player">${player}</div>
                 <div class="game-item-details">${size}x${size} • ${time}</div>
             </div>
-            <button onclick="joinGame('${game.id}')">${actionLabel}</button>
+            <button onclick="${onclickAction}">${actionLabel}</button>
         `;
         container.appendChild(item);
     });
@@ -1237,44 +1407,203 @@ function renderGameList(games, container, actionLabel) {
 
 refreshListBtn.onclick = fetchPublicGames;
 
-canvas.addEventListener("click", e => {
-    if (gameOver) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+// ========== Gestion Zoom/Pan + Interactions Plateau ==========
 
-    const halfCell = CELL_SIZE / 2;
-    const canvasX = (e.clientX - rect.left) * scaleX;
-    const canvasY = (e.clientY - rect.top) * scaleY;
+let _isDragging = false;
+let _dragLastX = 0, _dragLastY = 0;
+let _dragStartX = 0, _dragStartY = 0;
+let _dragMoved = false;
 
-    const x = Math.round((canvasX - BOARD_MARGIN - halfCell) / CELL_SIZE);
-    const y = Math.round((canvasY - BOARD_MARGIN - halfCell) / CELL_SIZE);
+let _isPinching = false;
+let _lastPinchDist = 0;
+let _isTouchDragging = false;
+let _touchLastX = 0, _touchLastY = 0;
+let _touchStartX = 0, _touchStartY = 0;
+let _touchMoved = false;
+
+function _pinchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function _zoomAround(wx, wy, factor) {
+    const newScale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale * factor));
+    viewport.x = wx - (wx - viewport.x) * (newScale / viewport.scale);
+    viewport.y = wy - (wy - viewport.y) * (newScale / viewport.scale);
+    viewport.scale = newScale;
+    clampViewport();
+    applyViewport();
+}
+
+// --- Mouse events (PC) ---
+boardWrapper.addEventListener('mousedown', e => {
+    _isDragging = true;
+    _dragMoved = false;
+    _dragStartX = _dragLastX = e.clientX;
+    _dragStartY = _dragLastY = e.clientY;
+});
+
+window.addEventListener('mousemove', e => {
+    if (_isDragging) {
+        const dx = e.clientX - _dragLastX;
+        const dy = e.clientY - _dragLastY;
+        if (Math.abs(e.clientX - _dragStartX) > 4 || Math.abs(e.clientY - _dragStartY) > 4) {
+            _dragMoved = true;
+            viewport.x += dx;
+            viewport.y += dy;
+            clampViewport();
+            applyViewport();
+        }
+        _dragLastX = e.clientX;
+        _dragLastY = e.clientY;
+    }
+    // Hover preview
+    if (document.getElementById("gameScreen").classList.contains("active")) {
+        updateHoverPoint(e);
+    }
+});
+
+window.addEventListener('mouseup', () => { _isDragging = false; });
+
+boardWrapper.addEventListener('click', e => {
+    if (_dragMoved || gameOver) return;
+    const { x, y } = clientToBoard(e.clientX, e.clientY);
     if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-        console.log("Clic sur le canvas:", { x, y });
         playMove(x, y);
     }
 });
-canvas.addEventListener("mousemove", updateHoverPoint);
-canvas.addEventListener("touchmove", updateHoverPoint);
-canvas.addEventListener("mouseout", () => {
+
+boardWrapper.addEventListener('mouseout', () => {
     hoverPoint = null;
     renderBoard();
 });
-canvas.addEventListener("touchend", () => {
+
+// Scroll molette = zoom
+boardWrapper.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = boardWrapper.getBoundingClientRect();
+    const wx = e.clientX - rect.left;
+    const wy = e.clientY - rect.top;
+    _zoomAround(wx, wy, e.deltaY > 0 ? 0.85 : 1.18);
+    updateHoverPoint(e);
+}, { passive: false });
+
+// --- Touch events (Mobile) ---
+boardWrapper.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+        _isPinching = true;
+        _isTouchDragging = false;
+        _lastPinchDist = _pinchDist(e.touches);
+    } else if (e.touches.length === 1) {
+        _isPinching = false;
+        _isTouchDragging = false;
+        _touchMoved = false;
+        _touchStartX = _touchLastX = e.touches[0].clientX;
+        _touchStartY = _touchLastY = e.touches[0].clientY;
+    }
+}, { passive: false });
+
+boardWrapper.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2 && _isPinching) {
+        const dist = _pinchDist(e.touches);
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = boardWrapper.getBoundingClientRect();
+        _zoomAround(cx - rect.left, cy - rect.top, dist / _lastPinchDist);
+        _lastPinchDist = dist;
+    } else if (e.touches.length === 1 && !_isPinching) {
+        const tx = e.touches[0].clientX;
+        const ty = e.touches[0].clientY;
+        const dx = tx - _touchLastX;
+        const dy = ty - _touchLastY;
+        if (Math.abs(tx - _touchStartX) > 8 || Math.abs(ty - _touchStartY) > 8) {
+            _touchMoved = true;
+            _isTouchDragging = true;
+        }
+        if (_isTouchDragging) {
+            viewport.x += dx;
+            viewport.y += dy;
+            clampViewport();
+            applyViewport();
+        }
+        _touchLastX = tx;
+        _touchLastY = ty;
+    }
+}, { passive: false });
+
+boardWrapper.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (_isPinching && e.touches.length < 2) {
+        _isPinching = false;
+        return;
+    }
+    // Tap (pas de déplacement) → coup en attente
+    if (!_touchMoved && !gameOver && e.changedTouches.length === 1) {
+        const touch = e.changedTouches[0];
+        const { x, y } = clientToBoard(touch.clientX, touch.clientY);
+        if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+            if (myColor === 0) {
+                showMessage(gameMessage, "Mode Spectateur : vous ne pouvez pas jouer.", "orange");
+            } else if (myColor !== currentPlayer) {
+                showMessage(gameMessage, "Ce n'est pas votre tour !", "orange");
+            } else {
+                showPendingMove(x, y);
+            }
+        }
+    }
     hoverPoint = null;
+    if (!pendingMove) renderBoard();
+}, { passive: false });
+// ========== Coup en attente de confirmation (mobile) ==========
+function showPendingMove(x, y) {
+    if (!isLegalMove(x, y, currentPlayer, board)) return;
+    pendingMove = { x, y };
+    confirmMoveUI.style.display = 'flex';
     renderBoard();
-});
+}
+
+function cancelPendingMove() {
+    pendingMove = null;
+    confirmMoveUI.style.display = 'none';
+    renderBoard();
+}
+
+confirmMoveBtn.onclick = () => {
+    if (pendingMove) {
+        const { x, y } = pendingMove;
+        pendingMove = null;
+        confirmMoveUI.style.display = 'none';
+        playMove(x, y);
+    }
+};
+
+cancelMoveBtn.onclick = cancelPendingMove;
+
+// ========== Boutons de contrôle ==========
 passButton.onclick = () => {
-    console.log("Bouton Passer cliqué.");
     if (!passButton.disabled) {
+        cancelPendingMove();
         passTurn();
     }
 };
+
+// Abandon : affiche la modal de confirmation
 forfeitButton.onclick = () => {
-    console.log("Bouton Abandonner cliqué.");
     if (!forfeitButton.disabled) {
-        resign();
+        resignModal.style.display = 'flex';
     }
+};
+
+confirmResignBtn.onclick = () => {
+    resignModal.style.display = 'none';
+    resign();
+};
+
+cancelResignBtn.onclick = () => {
+    resignModal.style.display = 'none';
 };
 // FIX: Ajout de l'écouteur pour le bouton Copier
 copyLinkBtn.onclick = () => {
