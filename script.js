@@ -306,7 +306,8 @@ function respondToUndo(accepted) {
             ...timerUpdate
         });
     } else {
-        db.ref(`games/${gameId}/undoRequest`).set(null);
+        // Notifier le demandeur du refus (ou impossibilité) — il nettoiera lui-même
+        db.ref(`games/${gameId}/undoRequest`).update({ accepted: false });
     }
 }
 
@@ -1431,7 +1432,7 @@ function setupGameListener() {
         // Undo request — afficher la notification à l'adversaire
         const undo = gameData.undoRequest;
         const undoNotif = document.getElementById('undoNotification');
-        if (undo && undo.accepted === null && undo.by !== myUid && myColor !== 0) {
+        if (undo && undo.accepted == null && undo.by !== myUid && myColor !== 0) {
             showUndoNotification(undo.byNickname);
         } else if (undoNotif) {
             undoNotif.style.display = 'none';
