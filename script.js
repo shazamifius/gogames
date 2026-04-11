@@ -105,6 +105,225 @@ let lastMove = null; // {x, y}
 let prisoners = { black: 0, white: 0 };
 let pendingMove = null; // {x, y} — coup en attente de confirmation (mobile)
 
+// ========== Son (AudioContext) ==========
+let _audioCtx = null;
+function playStoneSound() {
+    try {
+        if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const sr = _audioCtx.sampleRate;
+        const buf = _audioCtx.createBuffer(1, Math.floor(sr * 0.07), sr);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.5);
+        }
+        const src = _audioCtx.createBufferSource();
+        src.buffer = buf;
+        const bp = _audioCtx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 0.7;
+        const gain = _audioCtx.createGain();
+        gain.gain.value = 0.45;
+        src.connect(bp); bp.connect(gain); gain.connect(_audioCtx.destination);
+        src.start();
+    } catch(e) {}
+}
+
+// ========== Timer ==========
+let gameTimerInitialSec = 0;          // 0 = sans limite
+let localTimers = { black: 0, white: 0 }; // millisecondes restantes
+let timerLastMoveAtLocal = 0;
+let timerInterval = null;
+
+function formatTimer(ms) {
+    if (ms <= 0) return '0:00';
+    const s = Math.ceil(ms / 1000);
+    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+}
+
+function updateTimerDisplay() {
+    const bEl = document.getElementById('blackTimer');
+    const wEl = document.getElementById('whiteTimer');
+    if (!bEl || !wEl || gameTimerInitialSec === 0) return;
+    const elapsed = timerLastMoveAtLocal ? Date.now() - timerLastMoveAtLocal : 0;
+    let bMs = localTimers.black;
+    let wMs = localTimers.white;
+    if (!gameOver && elapsed > 0) {
+        if (currentPlayer === 1) bMs = Math.max(0, bMs - elapsed);
+        else                     wMs = Math.max(0, wMs - elapsed);
+    }
+    bEl.textContent = formatTimer(bMs);
+    wEl.textContent = formatTimer(wMs);
+    bEl.classList.toggle('low-time', bMs > 0 && bMs < 30000);
+    wEl.classList.toggle('low-time', wMs > 0 && wMs < 30000);
+    // Timeout : seul le joueur dont c'est le tour déclenche la fin
+    if (!gameOver && !moveInProgress) {
+        if (currentPlayer === 1 && bMs <= 0 && myColor === 1) {
+            clearInterval(timerInterval);
+            saveGameToFirebase({ lastReason: "Blanc gagne : Noir a dépassé le temps !", status: "finished" });
+        } else if (currentPlayer === 2 && wMs <= 0 && myColor === 2) {
+            clearInterval(timerInterval);
+            saveGameToFirebase({ lastReason: "Noir gagne : Blanc a dépassé le temps !", status: "finished" });
+        }
+    }
+}
+
+function startTimerTick() {
+    if (timerInterval) clearInterval(timerInterval);
+    if (gameTimerInitialSec === 0) return;
+    timerInterval = setInterval(updateTimerDisplay, 500);
+}
+
+function stopTimerTick() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+
+// ========== Numéros de coups ==========
+let showMoveNumbers = false;
+let moveList = []; // [{x, y}] dans l'ordre joué
+
+function drawMoveNumbers() {
+    if (!showMoveNumbers || !moveList || moveList.length === 0) return;
+    const halfCell = CELL_SIZE / 2;
+    const ox = BOARD_MARGIN + halfCell;
+    const oy = BOARD_MARGIN + halfCell;
+    ctx.font = `bold ${Math.floor(CELL_SIZE * 0.36)}px 'Outfit'`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    moveList.forEach(({ x, y }, i) => {
+        if (x < 0 || y < 0 || x >= BOARD_SIZE || y >= BOARD_SIZE) return;
+        if (!board[y] || board[y][x] === 0) return; // pierre capturée
+        const cx = ox + x * CELL_SIZE;
+        const cy = oy + y * CELL_SIZE;
+        ctx.fillStyle = board[y][x] === 1 ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)';
+        ctx.fillText((i + 1).toString(), cx, cy);
+    });
+}
+
+// ========== Chat ==========
+let chatListener = null;
+
+function setupChatListener() {
+    if (!gameId) return;
+    if (chatListener) db.ref(`games/${gameId}/chat`).off('child_added', chatListener);
+    const chatEl = document.getElementById('chatMessages');
+    if (!chatEl) return;
+    chatEl.innerHTML = '';
+    chatListener = db.ref(`games/${gameId}/chat`).limitToLast(60).on('child_added', snap => {
+        const msg = snap.val();
+        if (!msg) return;
+        const div = document.createElement('div');
+        const isSelf = msg.uid === myUid;
+        const isSystem = msg.uid === 'system';
+        if (isSystem) {
+            div.className = 'chat-msg chat-msg-system';
+            div.textContent = msg.text;
+        } else {
+            div.className = 'chat-msg' + (isSelf ? ' chat-msg-self' : '');
+            const safeText = msg.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            div.innerHTML = `<span class="chat-msg-name">${msg.nickname}:</span>${safeText}`;
+        }
+        chatEl.appendChild(div);
+        chatEl.scrollTop = chatEl.scrollHeight;
+        // Badge non-lu si le chat est fermé
+        const btn = document.getElementById('chatToggleBtn');
+        const panel = document.getElementById('chatPanel');
+        if (btn && panel && panel.style.display === 'none' && !isSelf) {
+            btn.textContent = '💬●';
+            btn.classList.add('active');
+        }
+    });
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    if (!input || !gameId) return;
+    const text = input.value.trim();
+    if (!text || text.length > 100) return;
+    db.ref(`games/${gameId}/chat`).push({ uid: myUid, nickname: myNickname, text, ts: Date.now() });
+    input.value = '';
+}
+
+function toggleChat() {
+    const panel = document.getElementById('chatPanel');
+    const btn = document.getElementById('chatToggleBtn');
+    if (!panel) return;
+    const open = panel.style.display === 'none';
+    panel.style.display = open ? 'flex' : 'none';
+    if (btn) {
+        btn.textContent = '💬';
+        btn.classList.toggle('active', open);
+    }
+    if (open) {
+        const chatEl = document.getElementById('chatMessages');
+        if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+    }
+}
+
+// ========== Annulation de coup (Undo) ==========
+function requestUndo() {
+    if (!gameRef || gameOver || moveList.length === 0 || myColor === 0) return;
+    db.ref(`games/${gameId}/undoRequest`).set({ by: myUid, byNickname: myNickname, accepted: null });
+    showMessage(gameMessage, "Demande d'annulation envoyée...", "lightblue");
+}
+
+function showUndoNotification(requesterNickname) {
+    const notif = document.getElementById('undoNotification');
+    const txt   = document.getElementById('undoNotificationText');
+    if (!notif || !txt) return;
+    txt.textContent = `${requesterNickname} demande l'annulation du dernier coup.`;
+    notif.style.display = 'block';
+}
+
+function respondToUndo(accepted) {
+    const notif = document.getElementById('undoNotification');
+    if (notif) notif.style.display = 'none';
+    if (!gameRef) return;
+    if (accepted && history.length >= 1) {
+        const newMoves     = moveList.slice(0, -1);
+        const newHistory   = history.slice(0, -1);
+        const prevBoard    = newHistory.length > 0
+            ? JSON.parse(newHistory[newHistory.length - 1])
+            : Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+        const prevPlayer   = currentPlayer === 1 ? 2 : 1;
+        const restoredPrisoners = newMoves.length > 0
+            ? (newMoves[newMoves.length - 1].prisonersAfter || { black: 0, white: 0 })
+            : { black: 0, white: 0 };
+        // Recalcul du timer : rendre le temps utilisé pour ce coup
+        const timerUpdate = gameTimerInitialSec > 0 ? {
+            timers: localTimers,
+            timerLastMoveAt: Date.now(),
+            timerActivePlayer: prevPlayer
+        } : {};
+        saveGameToFirebase({
+            board: prevBoard,
+            history: newHistory,
+            currentPlayer: prevPlayer,
+            consecutivePasses: 0,
+            lastReason: "undo",
+            lastMove: newMoves.length > 0 ? { x: newMoves[newMoves.length-1].x, y: newMoves[newMoves.length-1].y } : null,
+            prisoners: restoredPrisoners,
+            moves: newMoves,
+            undoRequest: null,
+            ...timerUpdate
+        });
+    } else {
+        db.ref(`games/${gameId}/undoRequest`).set(null);
+    }
+}
+
+// ========== Historique des parties ==========
+async function saveGameHistory(result, opponentNickname, boardSz) {
+    if (!myUid || myColor === 0) return;
+    try {
+        await db.ref(`users/${myUid}/history`).push({
+            date: Date.now(),
+            result,          // 'win' | 'loss' | 'draw'
+            opponent: opponentNickname || '?',
+            boardSize: boardSz,
+            gameId
+        });
+    } catch(e) { console.error("Erreur historique:", e); }
+}
+
 // ========== Viewport (Zoom / Pan) ==========
 const viewport = { x: 0, y: 0, scale: 1, minScale: 1, maxScale: 5 };
 
@@ -272,7 +491,99 @@ function updatePlayerInfoDisplay() {
             </div>
         </div>
     `;
+    // Refresh stats panel content if it's currently open
+    const panel = document.getElementById('statsPanel');
+    if (panel && panel.style.display !== 'none') {
+        renderStatsPanelContent(panel);
+    }
 }
+
+function renderStatsPanelContent(panel) {
+    const xpNeeded = myStats.level * 100;
+    const xpPct = Math.round((myStats.currentXP / xpNeeded) * 100);
+    panel.innerHTML = `
+        <div class="stats-panel-title">Profil joueur</div>
+        <div class="stats-xp">
+            <div class="stats-xp-label">
+                <span>Niveau ${myStats.level}</span>
+                <span>${Math.floor(myStats.currentXP)} / ${xpNeeded} XP</span>
+            </div>
+            <div class="xp-bar-container">
+                <div class="xp-bar-fill" style="width: ${xpPct}%"></div>
+            </div>
+        </div>
+        <div class="stats-row">
+            <span class="stats-label">Victoires</span>
+            <span class="stats-value green">🏆 ${myStats.wins}</span>
+        </div>
+        <div class="stats-row">
+            <span class="stats-label">Défaites</span>
+            <span class="stats-value red">✗ ${myStats.losses || 0}</span>
+        </div>
+        <div class="stats-row">
+            <span class="stats-label">Parties jouées</span>
+            <span class="stats-value">${myStats.gamesPlayed || 0}</span>
+        </div>
+        <div class="stats-row">
+            <span class="stats-label">Points totaux</span>
+            <span class="stats-value gold">★ ${Math.floor(myStats.totalPoints)}</span>
+        </div>
+        <div id="statsPanelHistory" class="stats-history-section">
+            <div class="stats-panel-title" style="margin-top:12px;">Dernières parties</div>
+            <p class="stats-label" style="font-size:0.72rem;">Chargement...</p>
+        </div>
+    `;
+    // Charger l'historique de manière asynchrone
+    if (myUid) {
+        db.ref(`users/${myUid}/history`).limitToLast(5).once('value').then(snap => {
+            const histSection = document.getElementById('statsPanelHistory');
+            if (!histSection) return;
+            const entries = [];
+            snap.forEach(child => entries.unshift(child.val())); // plus récent en premier
+            if (entries.length === 0) {
+                histSection.innerHTML = `
+                    <div class="stats-panel-title" style="margin-top:12px;">Dernières parties</div>
+                    <p class="stats-label" style="font-size:0.72rem;font-style:italic;">Aucune partie enregistrée.</p>`;
+                return;
+            }
+            const rows = entries.map(e => {
+                const icon = e.result === 'win' ? '🏆' : e.result === 'loss' ? '✗' : '—';
+                const color = e.result === 'win' ? 'green' : e.result === 'loss' ? 'red' : '';
+                const date = new Date(e.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' });
+                return `<div class="stats-row">
+                    <span class="stats-value ${color}" style="font-size:0.8rem;">${icon} vs ${e.opponent || '?'}</span>
+                    <span class="stats-label" style="font-size:0.72rem;">${e.boardSize}×${e.boardSize} · ${date}</span>
+                </div>`;
+            }).join('');
+            histSection.innerHTML = `
+                <div class="stats-panel-title" style="margin-top:12px;">Dernières parties</div>
+                ${rows}`;
+        }).catch(() => {});
+    }
+}
+
+function toggleStatsPanel() {
+    if (!myNickname) return;
+    const panel = document.getElementById('statsPanel');
+    if (!panel) return;
+    if (panel.style.display === 'none') {
+        renderStatsPanelContent(panel);
+        panel.style.display = 'block';
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+// Ferme le panneau stats si on clique en dehors
+document.addEventListener('click', e => {
+    const panel = document.getElementById('statsPanel');
+    const headerRight = document.querySelector('.header-right');
+    if (panel && panel.style.display !== 'none' && headerRight && !headerRight.contains(e.target)) {
+        panel.style.display = 'none';
+    }
+});
+
+playerInfo.addEventListener('click', toggleStatsPanel);
 
 async function updateMyStats(isWinner, points) {
     if (!myUid) return;
@@ -401,8 +712,13 @@ function computeScore(state) {
     return { black, white };
 }
 function updateScore() {
-    if (blackCapturesEl) blackCapturesEl.textContent = `${prisoners.black} capture${prisoners.black !== 1 ? 's' : ''}`;
-    if (whiteCapturesEl) whiteCapturesEl.textContent = `${prisoners.white} capture${prisoners.white !== 1 ? 's' : ''} · Komi ${KOMI}`;
+    const { black, white } = computeScore(board);
+    const bCap = prisoners.black;
+    const wCap = prisoners.white;
+    if (blackCapturesEl) blackCapturesEl.textContent =
+        `${bCap} cap. · ~${Math.floor(black)} pts`;
+    if (whiteCapturesEl) whiteCapturesEl.textContent =
+        `${wCap} cap. · ~${white.toFixed(1)} pts (komi ${KOMI})`;
 }
 
 function updatePlayerPanels(gameData) {
@@ -506,14 +822,27 @@ function playMove(x, y) {
 
     // Si on arrive ici, le coup est valide
     moveInProgress = true;
-
-    // Jouer un son
-    // soundClick.play().catch(e => {}); 
+    playStoneSound();
 
     // Mise à jour des prisonniers
     prisoners[currentPlayer === 1 ? 'black' : 'white'] += result.capturedStones;
 
+    // Calcul du temps utilisé pour ce coup
+    const timeUsed = timerLastMoveAtLocal ? Date.now() - timerLastMoveAtLocal : 0;
+    const colorKey = currentPlayer === 1 ? 'black' : 'white';
+    if (gameTimerInitialSec > 0) {
+        localTimers[colorKey] = Math.max(0, localTimers[colorKey] - timeUsed);
+    }
+
+    const newMove = { x, y, prisonersAfter: { ...prisoners } };
+    const newMoves = [...moveList, newMove];
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
+    const timerUpdate = gameTimerInitialSec > 0 ? {
+        timers: { black: localTimers.black, white: localTimers.white },
+        timerLastMoveAt: Date.now(),
+        timerActivePlayer: nextPlayer
+    } : {};
+
     saveGameToFirebase({
         board: result.newState,
         currentPlayer: nextPlayer,
@@ -521,7 +850,9 @@ function playMove(x, y) {
         consecutivePasses: 0,
         lastReason: "move",
         lastMove: { x, y },
-        prisoners: prisoners
+        prisoners: prisoners,
+        moves: newMoves,
+        ...timerUpdate
     });
 }
 
@@ -675,17 +1006,27 @@ async function endGame(message) {
 
         passButton.disabled = true;
         forfeitButton.disabled = true;
+        stopTimerTick();
         updateTurnIndicators();
 
-        // Mise à jour des stats si on est un joueur
+        // Revanche — visible pour les joueurs (pas les spectateurs)
+        if (myColor === 1 || myColor === 2) {
+            const rematchBtn = document.getElementById('rematchBtn');
+            if (rematchBtn) rematchBtn.style.display = 'inline-block';
+        }
+
+        // Mise à jour des stats + historique si on est un joueur
         if (myColor === 1 || myColor === 2) {
             const { black, white } = computeScore(board);
             let myScore = (myColor === 1) ? black : white;
             const isWinner = myColor === winnerColor;
             if (isWinner && message && message.includes("gagne par abandon")) {
-                myScore += 20; // Bonus pour victoire par abandon
+                myScore += 20;
             }
             updateMyStats(isWinner, myScore);
+            const opponentNickname = myColor === 1 ? whiteNickname : blackNickname;
+            const result = winnerColor === 0 ? 'draw' : (isWinner ? 'win' : 'loss');
+            saveGameHistory(result, opponentNickname, BOARD_SIZE);
         }
 
     } catch (err) {
@@ -970,6 +1311,7 @@ function drawHoverPoint() {
 function renderBoard() {
     drawGrid();
     drawStones();
+    drawMoveNumbers();
     drawHoverPoint();
 }
 function updateHoverPoint(e) {
@@ -1006,6 +1348,11 @@ function resetGame() {
     if (peerConnection) try { peerConnection.close(); } catch (e) { }
     dataChannel = null;
     peerConnection = null;
+    if (chatListener && gameId) {
+        try { db.ref(`games/${gameId}/chat`).off('child_added', chatListener); } catch(e) {}
+        chatListener = null;
+    }
+    stopTimerTick();
     updateBoardSize(BOARD_SIZE);
     history = [];
     currentPlayer = 1;
@@ -1016,6 +1363,20 @@ function resetGame() {
     prisoners = { black: 0, white: 0 };
     gameOver = false;
     pendingMove = null;
+    moveList = [];
+    gameTimerInitialSec = 0;
+    localTimers = { black: 0, white: 0 };
+    timerLastMoveAtLocal = 0;
+    const bEl = document.getElementById('blackTimer');
+    const wEl = document.getElementById('whiteTimer');
+    if (bEl) bEl.textContent = '';
+    if (wEl) wEl.textContent = '';
+    const chatPanel = document.getElementById('chatPanel');
+    if (chatPanel) chatPanel.style.display = 'none';
+    const chatToggle = document.getElementById('chatToggleBtn');
+    if (chatToggle) { chatToggle.textContent = '💬'; chatToggle.classList.remove('active'); }
+    const undoNotif = document.getElementById('undoNotification');
+    if (undoNotif) undoNotif.style.display = 'none';
     if (confirmMoveUI) confirmMoveUI.style.display = 'none';
     resetViewport();
     renderBoard();
@@ -1047,13 +1408,40 @@ function setupGameListener() {
         }
 
         board = gameData.board || board;
-        // FIX: Force le type entier pour éviter les bugs "1" !== 1
         currentPlayer = parseInt(gameData.currentPlayer) || currentPlayer;
-
         history = gameData.history || [];
         consecutivePasses = gameData.consecutivePasses || 0;
         lastMove = gameData.lastMove || null;
         prisoners = gameData.prisoners || { black: 0, white: 0 };
+        moveList = gameData.moves || [];
+
+        // Timer — synchroniser depuis Firebase
+        if (gameData.timerInitialSec > 0) {
+            gameTimerInitialSec = gameData.timerInitialSec;
+            if (gameData.timers) {
+                localTimers.black = gameData.timers.black || 0;
+                localTimers.white = gameData.timers.white || 0;
+            }
+            timerLastMoveAtLocal = gameData.timerLastMoveAt || 0;
+            if (gameData.status === 'playing') startTimerTick();
+        } else {
+            stopTimerTick();
+        }
+
+        // Undo request — afficher la notification à l'adversaire
+        const undo = gameData.undoRequest;
+        const undoNotif = document.getElementById('undoNotification');
+        if (undo && undo.accepted === null && undo.by !== myUid && myColor !== 0) {
+            showUndoNotification(undo.byNickname);
+        } else if (undoNotif) {
+            undoNotif.style.display = 'none';
+        }
+        // Si ma demande a été traitée
+        if (undo && undo.by === myUid && undo.accepted !== null) {
+            showMessage(gameMessage, undo.accepted ? "Annulation acceptée !" : "Annulation refusée.", undo.accepted ? "lightgreen" : "orange");
+            db.ref(`games/${gameId}/undoRequest`).set(null);
+        }
+
         renderBoard();
         updateScore();
         updateTurnIndicators();
@@ -1061,6 +1449,10 @@ function setupGameListener() {
         if (gameData.status === 'playing' && !document.getElementById("gameScreen").classList.contains("active")) {
             showScreen(gameScreen);
             showMessage(gameMessage, "Un adversaire a rejoint ! La partie commence.", "lightgreen");
+        }
+        // Activer le chat dès que la partie est active ou en spectateur
+        if ((gameData.status === 'playing' || gameData.status === 'finished') && !chatListener) {
+            setupChatListener();
         }
         if (gameData.status === "finished" && !gameOver) {
             endGame(gameData.lastReason || "La partie est terminée.");
@@ -1224,6 +1616,9 @@ createGameBtn.onclick = async () => {
         updateBoardSize(selectedSize);
 
         const isPublic = publicGameCheckbox.checked;
+        const timerSel = document.getElementById('timerSelect');
+        const chosenTimerSec = timerSel ? parseInt(timerSel.value) : 0;
+        const initialTimerMs = chosenTimerSec * 1000;
 
         const gameData = {
             status: "waiting",
@@ -1231,11 +1626,16 @@ createGameBtn.onclick = async () => {
             board: board,
             currentPlayer: currentPlayer,
             history: history,
+            moves: [],
             createdAt: Date.now(),
             expiresAt: Date.now() + 2 * 60 * 60 * 1000,
             consecutivePasses: 0,
             boardSize: selectedSize,
-            isPublic: isPublic
+            isPublic: isPublic,
+            timerInitialSec: chosenTimerSec,
+            timers: { black: initialTimerMs, white: initialTimerMs },
+            timerLastMoveAt: 0,
+            timerActivePlayer: 1
         };
         await gameRef.set(gameData);
         myColor = 1;
@@ -1304,6 +1704,7 @@ async function joinGame(targetGameId = null) {
         }
 
         setupGameListener();
+        setupChatListener();
         showScreen(gameScreen);
 
     } catch (error) {
@@ -1334,6 +1735,7 @@ async function spectateGame(targetGameId) {
 
         myColor = 0; // Toujours spectateur, jamais joueur
         setupGameListener();
+        setupChatListener();
         showScreen(gameScreen);
         showMessage(gameMessage, "Mode Spectateur activé.", "lightblue");
 
@@ -1621,6 +2023,45 @@ cancelResignBtn.onclick = () => {
 copyLinkBtn.onclick = () => {
     const code = gameLinkDisplay.textContent;
     copyToClipboard(code);
+};
+
+// ========== Nouveaux boutons de jeu ==========
+
+// Numéros de coups
+document.getElementById('toggleNumbersBtn').onclick = () => {
+    showMoveNumbers = !showMoveNumbers;
+    const btn = document.getElementById('toggleNumbersBtn');
+    btn.classList.toggle('active', showMoveNumbers);
+    renderBoard();
+};
+
+// Undo
+document.getElementById('undoBtn').onclick = requestUndo;
+
+// Undo réponse
+document.getElementById('undoAcceptBtn').onclick = () => respondToUndo(true);
+document.getElementById('undoRejectBtn').onclick  = () => respondToUndo(false);
+
+// Chat toggle
+document.getElementById('chatToggleBtn').onclick = toggleChat;
+
+// Chat envoi : bouton + Entrée
+document.getElementById('chatSendBtn').onclick = sendChatMessage;
+document.getElementById('chatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+});
+
+// Revanche
+document.getElementById('rematchBtn').onclick = () => {
+    const savedSize = BOARD_SIZE;
+    const rematchBtn = document.getElementById('rematchBtn');
+    if (rematchBtn) rematchBtn.style.display = 'none';
+    endGameOverlay.classList.remove('active');
+    resetGame();
+    showScreen(lobbyScreen);
+    const sel = document.getElementById('boardSizeSelect');
+    if (sel) sel.value = savedSize.toString();
+    showMessage(lobbyMessage, "Créez une partie pour la revanche — même taille, couleurs inversées !", "gold");
 };
 
 init();
