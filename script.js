@@ -1438,7 +1438,7 @@ function setupGameListener() {
             undoNotif.style.display = 'none';
         }
         // Si ma demande a été traitée
-        if (undo && undo.by === myUid && undo.accepted !== null) {
+        if (undo && undo.by === myUid && undo.accepted != null) {
             showMessage(gameMessage, undo.accepted ? "Annulation acceptée !" : "Annulation refusée.", undo.accepted ? "lightgreen" : "orange");
             db.ref(`games/${gameId}/undoRequest`).set(null);
         }
