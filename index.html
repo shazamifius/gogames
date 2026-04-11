@@ -18,6 +18,7 @@
     <h1 class="logo"><a href="#" id="mainPageLink">Online Go Game</a></h1>
     <div class="header-right">
       <div id="playerInfo" class="player-info">Non connecté</div>
+      <div id="statsPanel" class="stats-panel" style="display:none;"></div>
       <button id="logoutBtn" style="display:none;">Déconnexion</button>
     </div>
   </header>
@@ -76,6 +77,16 @@
                             <option value="19" selected>19x19 (Standard)</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="timerSelect">Temps par joueur :</label>
+                        <select id="timerSelect">
+                            <option value="0">Sans limite</option>
+                            <option value="300">5 min</option>
+                            <option value="600" selected>10 min</option>
+                            <option value="1200">20 min</option>
+                            <option value="1800">30 min</option>
+                        </select>
+                    </div>
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="publicGameCheckbox" checked>
                         <label for="publicGameCheckbox">Partie Publique (visible dans la liste)</label>
@@ -111,6 +122,7 @@
             <span class="panel-name" id="blackPlayerName">Noir</span>
             <span class="panel-sub" id="blackCapturesText">0 captures</span>
           </div>
+          <span class="panel-timer" id="blackTimer"></span>
           <div class="turn-dot" id="blackTurnDot"></div>
         </div>
 
@@ -129,6 +141,7 @@
             <span class="panel-name" id="whitePlayerName">Blanc</span>
             <span class="panel-sub" id="whiteCapturesText">0 captures · Komi 7.5</span>
           </div>
+          <span class="panel-timer" id="whiteTimer"></span>
           <div class="turn-dot" id="whiteTurnDot"></div>
         </div>
 
@@ -144,7 +157,19 @@
 
       <div class="controls">
         <button id="passButton">Passer</button>
+        <button id="undoBtn" class="btn-icon" title="Demander l'annulation du dernier coup">↩</button>
+        <button id="toggleNumbersBtn" class="btn-icon" title="Afficher les numéros des coups">№</button>
+        <button id="chatToggleBtn" class="btn-icon" title="Ouvrir le chat">💬</button>
         <button id="forfeitButton">Abandonner</button>
+      </div>
+
+      <!-- Chat en partie -->
+      <div id="chatPanel" class="chat-panel" style="display:none;">
+        <div id="chatMessages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Message..." maxlength="100" autocomplete="off">
+          <button id="chatSendBtn">→</button>
+        </div>
       </div>
     </div>
   </div>
@@ -161,10 +186,20 @@
     </div>
   </div>
 
+  <!-- Notification demande d'annulation -->
+  <div id="undoNotification" class="undo-notification" style="display:none;">
+    <p id="undoNotificationText"></p>
+    <div class="undo-actions">
+      <button id="undoAcceptBtn" class="btn-confirm">Accepter</button>
+      <button id="undoRejectBtn" class="btn-cancel">Refuser</button>
+    </div>
+  </div>
+
   <div id="endGameOverlay" class="end-game-overlay">
     <div class="end-game-message-container">
         <h2 id="endGameMessage" class="end-game-message"></h2>
         <p id="endGameCountdown" class="end-game-countdown"></p>
+        <button id="rematchBtn" class="btn-rematch" style="display:none;">⚔ Revanche</button>
     </div>
   </div>
 
