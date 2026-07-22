@@ -479,6 +479,7 @@ select option {
 .lobby-options {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 50px;
   width: 100%;
   max-width: 900px;
@@ -487,8 +488,10 @@ select option {
 }
 
 .create-game-box,
-.join-game-box {
+.join-game-box,
+.katago-box {
   flex: 1;
+  min-width: 240px;
   padding: 30px;
   background: var(--bg-panel-glass);
   border-radius: var(--radius-lg);
@@ -496,6 +499,21 @@ select option {
   flex-direction: column;
   gap: 15px;
   border: 1px solid var(--border-glass);
+}
+
+/* Le mode solo se distingue des deux encadres multijoueur par l'accent bois. */
+.katago-box {
+  border-color: var(--primary-wood-dark);
+  box-shadow: var(--shadow-neon);
+}
+
+.katago-box code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.8em;
+  color: var(--primary-wood);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
 }
 
 .form-group label {
@@ -1316,4 +1334,39 @@ select option {
 
   /* Zoom hint inutile sur tactile */
   .zoom-hint { display: none; }
+}
+
+/* ========== Mode contre KataGo ========== */
+
+.ai-eval-bar {
+  margin: 10px auto 0;
+  max-width: 620px;
+  padding: 8px 16px;
+  background: var(--bg-panel-glass);
+  border: 1px solid var(--primary-wood-dark);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* Pulsation discrete sur le panneau du joueur pendant la recherche MCTS. */
+.player-panel.ai-thinking {
+  border-color: var(--primary-wood);
+  animation: aiThinkingPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes aiThinkingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--primary-glow); }
+  50%      { box-shadow: 0 0 14px 3px var(--primary-glow); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-panel.ai-thinking { animation: none; }
+}
+
+@media (max-width: 768px) {
+  .katago-box { padding: 20px; gap: 12px; }
+  .ai-eval-bar { font-size: 0.78rem; padding: 6px 10px; }
 }

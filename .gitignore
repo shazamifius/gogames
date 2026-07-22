@@ -1,0 +1,14 @@
+# Moteur KataGo : binaires et reseaux, jamais versionnes (plusieurs centaines de Mo)
+katago/
+*.bin.gz
+*.txt.gz
+*.zip
+
+# Bridge local
+node_modules/
+npm-debug.log*
+.env
+
+# Divers
+.DS_Store
+Thumbs.db
