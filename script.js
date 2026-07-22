@@ -1561,13 +1561,23 @@ saveNicknameBtn.onclick = async () => {
     const nickname = nicknameInput.value.trim();
     if (nickname.length < 3) { showMessage(nicknameMessage, "Le pseudo doit avoir au moins 3 caractères.", "red"); return; }
     myNickname = nickname;
-    myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0 };
-    await db.ref(`users/${myUid}`).update({
-        level: 1,
-        wins: 0,
-        totalPoints: 0,
-        currentXP: 0
-    });
+
+    // Le pseudo n'était pas persisté : à la reconnexion, userData.nickname
+    // valait undefined, l'écran de pseudo réapparaissait, et cette fonction
+    // remettait les statistiques à zéro. La progression ne pouvait donc
+    // jamais s'accumuler d'une session à l'autre.
+    const snap = await db.ref(`users/${myUid}`).once("value");
+    const existing = snap.val() || {};
+
+    if (existing.level === undefined) {
+        // Compte réellement neuf : on initialise.
+        myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0 };
+        await db.ref(`users/${myUid}`).update({ nickname, ...myStats });
+    } else {
+        // Compte existant : on ne touche qu'au pseudo.
+        await db.ref(`users/${myUid}`).update({ nickname });
+    }
+
     updatePlayerInfoDisplay();
     showScreen(lobbyScreen);
 };
