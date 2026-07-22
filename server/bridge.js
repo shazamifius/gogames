@@ -16,13 +16,27 @@ const fs = require('fs');
 const readline = require('readline');
 const { spawn } = require('child_process');
 
-const PORT = 8081;
+const PORT = Number(process.env.BRIDGE_PORT) || 8081;
 const HOST = '127.0.0.1';
 
-const KATAGO_DIR = path.resolve(__dirname, '..', 'katago');
-const KATAGO_EXE = path.join(KATAGO_DIR, 'katago.exe');
-const KATAGO_MODEL = path.join(KATAGO_DIR, 'net.bin.gz');
-const KATAGO_CONFIG = path.join(KATAGO_DIR, 'analysis.cfg');
+/* Le meme fichier sert dans deux dispositions differentes :
+     - depot cloné      : server/bridge.js  avec  ../katago/
+     - installeur       : bridge.js         avec  ./katago/
+   et sous macOS le binaire vient de Homebrew, hors de toute arborescence.
+   KATAGO_BIN, s'il est defini, tranche. */
+
+const CANDIDATE_DIRS = [
+  process.env.KATAGO_DIR,
+  path.resolve(__dirname, 'katago'),
+  path.resolve(__dirname, '..', 'katago')
+].filter(Boolean);
+
+const KATAGO_DIR = CANDIDATE_DIRS.find((d) => fs.existsSync(d)) || CANDIDATE_DIRS[0];
+
+const EXE_NAME = process.platform === 'win32' ? 'katago.exe' : 'katago';
+const KATAGO_EXE = process.env.KATAGO_BIN || path.join(KATAGO_DIR, EXE_NAME);
+const KATAGO_MODEL = process.env.KATAGO_MODEL || path.join(KATAGO_DIR, 'net.bin.gz');
+const KATAGO_CONFIG = process.env.KATAGO_CONFIG || path.join(KATAGO_DIR, 'analysis.cfg');
 
 // Le bridge n'ecoute que sur la boucle locale, mais on restreint quand meme les
 // origines : sans ca, n'importe quel site ouvert dans le navigateur pourrait
@@ -52,7 +66,9 @@ const engine = spawn(KATAGO_EXE, [
   'analysis',
   '-config', KATAGO_CONFIG,
   '-model', KATAGO_MODEL
-], { cwd: KATAGO_DIR });
+  // KataGo ecrit son cache de calibration GPU dans le repertoire courant : on
+  // le place a cote du modele, pas la ou l'utilisateur a lance la commande.
+], { cwd: fs.existsSync(KATAGO_DIR) ? KATAGO_DIR : path.dirname(KATAGO_CONFIG) });
 
 engine.on('error', (err) => {
   console.error('[bridge] impossible de lancer KataGo :', err.message);

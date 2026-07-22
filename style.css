@@ -1417,3 +1417,132 @@ select option {
   background: rgba(197, 160, 101, 0.1);
   box-shadow: var(--shadow-neon);
 }
+
+/* ========== Detection du moteur local ========== */
+
+.bridge-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-glass);
+  color: var(--text-muted);
+}
+
+.bridge-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.bridge-status.ready    { border-color: #4e7a3a; color: #a5d68a; }
+.bridge-status.ready    .bridge-dot { background: #81c784; box-shadow: 0 0 8px #81c784; }
+.bridge-status.absent   { border-color: #7a4a3a; color: #e0a58a; }
+.bridge-status.absent   .bridge-dot { background: #e57373; }
+.bridge-status.starting,
+.bridge-status.checking { border-color: var(--primary-wood-dark); color: var(--primary-wood); }
+.bridge-status.starting .bridge-dot,
+.bridge-status.checking .bridge-dot {
+  background: var(--primary-wood);
+  animation: bridgePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes bridgePulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+button:disabled:hover {
+  transform: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* ========== Panneau d'installation ========== */
+
+.install-panel {
+  border-top: 1px solid var(--border-glass);
+  padding-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.install-intro {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.install-intro strong { color: var(--primary-wood); }
+
+.install-os-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.os-tab {
+  flex: 1;
+  padding: 7px 4px;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  color: var(--text-muted);
+  text-shadow: none;
+  box-shadow: none;
+}
+
+.os-tab:hover { transform: none; box-shadow: none; border-color: var(--primary-wood-dark); }
+
+.os-tab.active {
+  background: linear-gradient(135deg, var(--primary-wood) 0%, var(--primary-wood-dark) 100%);
+  color: #fff;
+  border-color: transparent;
+}
+
+.install-step {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.install-cmd-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.install-cmd-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  background: #14141a;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  color: var(--primary-wood);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.74rem;
+  /* La commande doit rester selectionnable d'un bloc : on la fait defiler
+     plutot que de la couper sur plusieurs lignes. */
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.install-cmd-row .btn-icon { flex-shrink: 0; padding: 0 14px; }
+
+@media (max-width: 768px) {
+  .install-cmd-row code { font-size: 0.68rem; }
+  .os-tab { font-size: 0.66rem; }
+}

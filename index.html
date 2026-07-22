@@ -128,8 +128,32 @@
                             <option value="10000">Maximum — 10000 visites (lent)</option>
                         </select>
                     </div>
-                    <button id="playKataGoBtn">Lancer la partie</button>
-                    <p class="info-note">Nécessite le moteur local : <code>node server/bridge.js</code></p>
+                    <div id="bridgeStatus" class="bridge-status checking">
+                        <span class="bridge-dot"></span>
+                        <span id="bridgeStatusText">Recherche du moteur…</span>
+                    </div>
+
+                    <button id="playKataGoBtn" disabled>Lancer la partie</button>
+
+                    <!-- Affiché seulement quand le moteur local est absent -->
+                    <div id="installPanel" class="install-panel" style="display:none;">
+                        <p class="install-intro">
+                            KataGo tourne <strong>sur votre machine</strong>, pas sur un serveur.
+                            Une seule installation, puis le site le détecte tout seul.
+                        </p>
+                        <div class="install-os-tabs">
+                            <button class="os-tab" data-os="windows">Windows</button>
+                            <button class="os-tab" data-os="linux">Linux</button>
+                            <button class="os-tab" data-os="mac">macOS</button>
+                        </div>
+                        <p class="install-step">Collez cette ligne dans <span id="installShellName">PowerShell</span> :</p>
+                        <div class="install-cmd-row">
+                            <code id="installCmd"></code>
+                            <button id="copyInstallCmdBtn" class="btn-icon" title="Copier">⧉</button>
+                        </div>
+                        <p id="installNote" class="info-note"></p>
+                        <button id="recheckBridgeBtn" class="btn-guest">J'ai lancé le moteur — revérifier</button>
+                    </div>
                 </div>
             </div>
 

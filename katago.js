@@ -364,6 +364,84 @@ resetGame = function () {
     _resetGameWithoutAi();
 };
 
+/* ========== Detection du moteur local et aide a l'installation ========== */
+
+const SITE_URL = "https://shazamifius.github.io/gogames";
+
+const INSTALL_COMMANDS = {
+    windows: {
+        shell: "PowerShell",
+        cmd: `irm ${SITE_URL}/install/install.ps1 | iex`,
+        note: "Menu Démarrer → tapez « PowerShell » → collez la ligne → Entrée."
+    },
+    linux: {
+        shell: "un terminal",
+        cmd: `curl -fsSL ${SITE_URL}/install/install.sh | sh`,
+        note: "Aucun prérequis : si Node.js manque, une version portable est installée dans le dossier du jeu."
+    },
+    mac: {
+        shell: "un terminal",
+        cmd: `curl -fsSL ${SITE_URL}/install/install.sh | sh`,
+        note: "KataGo ne publie aucun binaire macOS : l'installation passe par Homebrew (brew.sh)."
+    }
+};
+
+function detectPlatform() {
+    // userAgentData est le mecanisme moderne ; userAgent reste le repli.
+    const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    const ua = navigator.userAgent || "";
+    const hay = (p + " " + ua).toLowerCase();
+    if (hay.includes("win")) return "windows";
+    if (hay.includes("mac") || hay.includes("iphone") || hay.includes("ipad")) return "mac";
+    return "linux";
+}
+
+function showInstallFor(os) {
+    const info = INSTALL_COMMANDS[os] || INSTALL_COMMANDS.linux;
+    const cmdEl = document.getElementById("installCmd");
+    const shellEl = document.getElementById("installShellName");
+    const noteEl = document.getElementById("installNote");
+    if (cmdEl) cmdEl.textContent = info.cmd;
+    if (shellEl) shellEl.textContent = info.shell;
+    if (noteEl) noteEl.textContent = info.note;
+    document.querySelectorAll(".os-tab").forEach((t) => {
+        t.classList.toggle("active", t.dataset.os === os);
+    });
+}
+
+function setBridgeStatus(state, text) {
+    const box = document.getElementById("bridgeStatus");
+    const label = document.getElementById("bridgeStatusText");
+    const playBtn = document.getElementById("playKataGoBtn");
+    const panel = document.getElementById("installPanel");
+    if (box) box.className = "bridge-status " + state;
+    if (label) label.textContent = text;
+    if (playBtn) playBtn.disabled = state !== "ready";
+    if (panel) panel.style.display = state === "ready" ? "none" : "block";
+}
+
+async function checkBridge() {
+    setBridgeStatus("checking", "Recherche du moteur…");
+    try {
+        // Un moteur absent doit se voir vite : sans borne, la requete peut
+        // trainer plusieurs secondes avant d'echouer.
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 2500);
+        const res = await fetch(KATAGO_BRIDGE_URL + "/health", { signal: ctrl.signal });
+        clearTimeout(timer);
+        const health = await res.json();
+        if (health.ok) {
+            setBridgeStatus("ready", `Moteur prêt — ${health.engine}`);
+        } else {
+            setBridgeStatus("starting", "Le moteur démarre (calibration GPU)…");
+        }
+        return health.ok;
+    } catch (e) {
+        setBridgeStatus("absent", "Moteur non détecté sur cette machine");
+        return false;
+    }
+}
+
 /* ========== Mode invite ========== */
 /* Une partie contre KataGo est entierement locale : exiger un compte Firebase
    n'apporte rien. On amene donc l'invite au lobby avec le multijoueur masque,
@@ -407,6 +485,24 @@ function bindKataGoButton() {
     if (btn) btn.onclick = startKataGoGame;
     const guestBtn = document.getElementById("guestKataGoBtn");
     if (guestBtn) guestBtn.onclick = enterGuestMode;
+
+    showInstallFor(detectPlatform());
+    document.querySelectorAll(".os-tab").forEach((tab) => {
+        tab.onclick = () => showInstallFor(tab.dataset.os);
+    });
+
+    const copyBtn = document.getElementById("copyInstallCmdBtn");
+    if (copyBtn) copyBtn.onclick = () => {
+        const cmd = document.getElementById("installCmd").textContent;
+        copyToClipboard(cmd);
+        copyBtn.textContent = "✓";
+        setTimeout(() => { copyBtn.textContent = "⧉"; }, 1500);
+    };
+
+    const recheck = document.getElementById("recheckBridgeBtn");
+    if (recheck) recheck.onclick = checkBridge;
+
+    checkBridge();
 }
 
 if (document.readyState === "loading") {

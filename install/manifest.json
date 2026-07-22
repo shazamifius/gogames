@@ -1,0 +1,46 @@
+{
+  "_comment": "Source unique de verite pour les installeurs et pour la page. Mettre a jour ICI seulement.",
+
+  "katagoVersion": "v1.16.5",
+  "nodeVersion": "v24.18.0",
+  "bridgePort": 8081,
+
+  "networks": {
+    "default": {
+      "file": "kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
+      "bytes": 97898094,
+      "elo": 13620,
+      "label": "b18c384nbt — 98 Mo, tres largement surhumain"
+    },
+    "strong": {
+      "file": "kata1-b28c512nbt-s13255194368-d5935380940.bin.gz",
+      "bytes": 271440852,
+      "elo": 14107,
+      "label": "b28c512nbt — 271 Mo, plus fort mais plus lent"
+    }
+  },
+  "networkBaseUrl": "https://media.katagotraining.org/uploaded/networks/models/kata1/",
+
+  "platforms": {
+    "windows-x64": {
+      "gpu": "katago-v1.16.5-opencl-windows-x64.zip",
+      "cpu": "katago-v1.16.5-eigenavx2-windows-x64.zip",
+      "exe": "katago.exe"
+    },
+    "linux-x64": {
+      "gpu": "katago-v1.16.5-opencl-linux-x64.zip",
+      "cpu": "katago-v1.16.5-eigenavx2-linux-x64.zip",
+      "exe": "katago"
+    },
+    "darwin": {
+      "_comment": "KataGo ne publie aucun binaire macOS ni ARM : Homebrew fournit une version precompilee.",
+      "homebrew": "katago",
+      "exe": "katago"
+    }
+  },
+
+  "unsupported": {
+    "_comment": "Pas de binaire officiel pour ces plateformes ; compilation depuis les sources requise.",
+    "platforms": ["windows-arm64", "linux-arm64", "linux-x86"]
+  }
+}

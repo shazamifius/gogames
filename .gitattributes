@@ -1,0 +1,17 @@
+# Normalisation des fins de ligne.
+* text=auto
+
+# Un script shell en CRLF est inexecutable sous Linux et macOS : le noyau lit
+# "#!/bin/sh\r" et repond "bad interpreter". Ces fichiers DOIVENT rester en LF.
+*.sh text eol=lf
+
+# Inversement, les scripts Windows restent en CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaires : aucune conversion.
+*.png binary
+*.jpg binary
+*.gz  binary
+*.zip binary
