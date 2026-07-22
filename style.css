@@ -1370,3 +1370,50 @@ select option {
   .katago-box { padding: 20px; gap: 12px; }
   .ai-eval-bar { font-size: 0.78rem; padding: 6px 10px; }
 }
+
+/* ========== Mode invite ========== */
+/* Sans compte, seule la partie contre KataGo a du sens : on masque tout
+   ce qui depend de Firebase plutot que de le desactiver a moitie. */
+
+.guest-mode .create-game-box,
+.guest-mode .join-game-box,
+.guest-mode .game-list-sidebar,
+.guest-mode #statsPanel {
+  display: none;
+}
+
+.guest-mode .lobby-options {
+  max-width: 460px;
+}
+
+.auth-separator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 4px 0;
+}
+
+.auth-separator::before,
+.auth-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-glass);
+}
+
+.btn-guest {
+  background: transparent;
+  border: 1px solid var(--primary-wood-dark);
+  color: var(--primary-wood);
+  text-shadow: none;
+  box-shadow: none;
+}
+
+.btn-guest:hover {
+  background: rgba(197, 160, 101, 0.1);
+  box-shadow: var(--shadow-neon);
+}

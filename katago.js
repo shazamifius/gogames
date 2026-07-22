@@ -277,10 +277,10 @@ function showAiEvaluation(info) {
 /* ========== Demarrage d'une partie contre KataGo ========== */
 
 async function startKataGoGame() {
-    if (!auth.currentUser) {
-        showMessage(lobbyMessage, "Connectez-vous d'abord.", "red");
-        return;
-    }
+    // Aucun compte n'est requis : la partie est entierement locale. Les seules
+    // ecritures Firebase sont les statistiques de fin de partie, et
+    // updateMyStats() comme saveGameHistory() sortent deja tot si myUid est nul.
+    if (!myNickname) myNickname = "Invite";
 
     // Verifier que le bridge repond avant d'ouvrir le plateau.
     try {
@@ -364,12 +364,49 @@ resetGame = function () {
     _resetGameWithoutAi();
 };
 
+/* ========== Mode invite ========== */
+/* Une partie contre KataGo est entierement locale : exiger un compte Firebase
+   n'apporte rien. On amene donc l'invite au lobby avec le multijoueur masque,
+   ce qui reutilise l'encadre KataGo existant plutot que de dupliquer ses reglages. */
+
+function enterGuestMode() {
+    myUid = null;
+    myNickname = "Invite";
+    document.body.classList.add("guest-mode");
+    playerInfo.textContent = "Invite — sans compte";
+    logoutBtn.textContent = "Quitter";
+    logoutBtn.style.display = "block";
+    logoutBtn.onclick = exitGuestMode;
+    showScreen(lobbyScreen);
+    showMessage(lobbyMessage,
+        "Mode invite : partie contre KataGo uniquement. Aucune statistique n'est enregistree.",
+        "lightblue");
+}
+
+function exitGuestMode() {
+    document.body.classList.remove("guest-mode");
+    myNickname = null;
+    playerInfo.textContent = "Non connecte";
+    logoutBtn.textContent = "Deconnexion";
+    logoutBtn.style.display = "none";
+    // On rend la main au gestionnaire d'origine de script.js.
+    logoutBtn.onclick = () => {
+        auth.signOut()
+            .then(() => showMessage(authMessage, "Deconnecte.", "lightgreen"))
+            .catch((err) => showMessage(authMessage, err.message, "red"));
+    };
+    resetGame();
+    showScreen(authScreen);
+}
+
 /* script.js appelle init() directement en fin de fichier, sans attendre
    DOMContentLoaded : on s'aligne, tout en restant correct si ce fichier venait
    a etre charge plus tot. */
 function bindKataGoButton() {
     const btn = document.getElementById("playKataGoBtn");
     if (btn) btn.onclick = startKataGoGame;
+    const guestBtn = document.getElementById("guestKataGoBtn");
+    if (guestBtn) guestBtn.onclick = enterGuestMode;
 }
 
 if (document.readyState === "loading") {

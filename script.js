@@ -1598,6 +1598,9 @@ auth.onAuthStateChanged(async user => {
             cleanUpOldGames();
         }
     } else {
+        // Le mode invité (partie locale contre KataGo) n'utilise aucun compte :
+        // la résolution asynchrone de l'état Firebase ne doit pas l'éjecter.
+        if (document.body.classList.contains("guest-mode")) return;
         myUid = null;
         myNickname = null;
         playerInfo.textContent = "Non connecté";
