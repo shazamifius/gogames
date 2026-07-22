@@ -218,8 +218,8 @@ function setupChatListener() {
             div.textContent = msg.text;
         } else {
             div.className = 'chat-msg' + (isSelf ? ' chat-msg-self' : '');
-            const safeText = msg.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            div.innerHTML = `<span class="chat-msg-name">${msg.nickname}:</span>${safeText}`;
+            // Le texte était déjà échappé, mais pas le pseudo de l'expéditeur.
+            div.innerHTML = `<span class="chat-msg-name">${escapeHtml(msg.nickname)}:</span>${escapeHtml(msg.text)}`;
         }
         chatEl.appendChild(div);
         chatEl.scrollTop = chatEl.scrollHeight;
@@ -468,6 +468,19 @@ function showScreen(screen) {
         renderBoard();
     }
 }
+/* Échappe une valeur avant insertion dans du HTML.
+   Les pseudos sont choisis librement par les joueurs et se retrouvent dans le
+   lobby, le chat et l'historique : sans échappement, un pseudo comme
+   <img src=x onerror=…> s'exécute chez tous ceux qui l'affichent. */
+function escapeHtml(value) {
+    return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 function showMessage(el, text, color = "#bbb") {
     el.innerText = text;
     el.style.color = color;
@@ -481,7 +494,7 @@ function updatePlayerInfoDisplay() {
     const xpNeeded = myStats.level * 100;
     playerInfo.innerHTML = `
         <div class="profile-display">
-            <span class="profile-name">${myNickname}</span>
+            <span class="profile-name">${escapeHtml(myNickname)}</span>
             <div class="profile-stats">
                 <span class="stat-badge level-badge">Niv. ${myStats.level}</span>
                 <span class="stat-badge win-badge">🏆 ${myStats.wins}</span>
@@ -552,7 +565,7 @@ function renderStatsPanelContent(panel) {
                 const color = e.result === 'win' ? 'green' : e.result === 'loss' ? 'red' : '';
                 const date = new Date(e.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' });
                 return `<div class="stats-row">
-                    <span class="stats-value ${color}" style="font-size:0.8rem;">${icon} vs ${e.opponent || '?'}</span>
+                    <span class="stats-value ${color}" style="font-size:0.8rem;">${icon} vs ${escapeHtml(e.opponent || '?')}</span>
                     <span class="stats-label" style="font-size:0.72rem;">${e.boardSize}×${e.boardSize} · ${date}</span>
                 </div>`;
             }).join('');
@@ -1636,7 +1649,10 @@ createGameBtn.onclick = async () => {
 
         const gameData = {
             status: "waiting",
-            players: { black: { uid: myUid, email: auth.currentUser.email, nickname: myNickname } },
+            // L'e-mail n'est jamais relu par l'application et le nœud games est
+            // lisible sans authentification : le stocker exposait publiquement
+            // l'adresse des joueurs. Le pseudo suffit à l'affichage.
+            players: { black: { uid: myUid, nickname: myNickname } },
             board: board,
             currentPlayer: currentPlayer,
             history: history,
@@ -1698,7 +1714,7 @@ async function joinGame(targetGameId = null) {
         if (gameData.status === 'waiting' && !gameData.players.white) {
             // Rejoindre en tant que joueur Blanc
             await gameRef.update({
-                'players/white': { uid: myUid, email: auth.currentUser.email, nickname: myNickname },
+                'players/white': { uid: myUid, nickname: myNickname },
                 status: 'playing'
             });
             myColor = 2;
@@ -1810,25 +1826,43 @@ function renderGameList(games, container, actionLabel) {
         return;
     }
 
+    // Construit avec les API DOM et non par innerHTML : le pseudo et la clé de
+    // partie viennent d'utilisateurs arbitraires. Interpolés dans une chaîne
+    // HTML, un pseudo tel que <img src=x onerror=…> s'exécutait chez tous les
+    // visiteurs du lobby. textContent ne peut jamais produire de balisage.
     games.forEach(game => {
         const item = document.createElement('div');
         item.className = 'game-item';
 
-        const player = game.players.black.nickname || "Inconnu";
+        const player = (game.players && game.players.black && game.players.black.nickname) || "Inconnu";
         const size = game.boardSize || 19;
         const time = formatTime(game.createdAt);
 
-        const onclickAction = actionLabel === "Regarder"
-            ? `spectateGame('${game.id}')`
-            : `joinGame('${game.id}')`;
+        const info = document.createElement('div');
+        info.className = 'game-item-info';
 
-        item.innerHTML = `
-            <div class="game-item-info">
-                <div class="game-item-player">${player}</div>
-                <div class="game-item-details">${size}x${size} • ${time}</div>
-            </div>
-            <button onclick="${onclickAction}">${actionLabel}</button>
-        `;
+        const nameEl = document.createElement('div');
+        nameEl.className = 'game-item-player';
+        nameEl.textContent = player;
+
+        const detailsEl = document.createElement('div');
+        detailsEl.className = 'game-item-details';
+        detailsEl.textContent = `${size}x${size} • ${time}`;
+
+        info.appendChild(nameEl);
+        info.appendChild(detailsEl);
+
+        const btn = document.createElement('button');
+        btn.textContent = actionLabel;
+        // Écouteur plutôt qu'attribut onclick : l'identifiant reste une valeur
+        // et n'est jamais réinterprété comme du code.
+        btn.addEventListener('click', () => {
+            if (actionLabel === "Regarder") spectateGame(game.id);
+            else joinGame(game.id);
+        });
+
+        item.appendChild(info);
+        item.appendChild(btn);
         container.appendChild(item);
     });
 }

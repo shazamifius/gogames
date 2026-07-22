@@ -118,7 +118,7 @@ async function maybeAiMove() {
     setAiStatus(true);
 
     try {
-        const response = await fetch(KATAGO_BRIDGE_URL + "/genmove", {
+        const response = await bridgeFetch("/genmove", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -284,7 +284,7 @@ async function startKataGoGame() {
 
     // Verifier que le bridge repond avant d'ouvrir le plateau.
     try {
-        const health = await fetch(KATAGO_BRIDGE_URL + "/health").then((r) => r.json());
+        const health = await bridgeFetch("/health").then((r) => r.json());
         if (!health.ok) {
             showMessage(lobbyMessage, "KataGo demarre encore (calibration OpenCL). Reessayez dans un instant.", "orange");
             return;
@@ -386,6 +386,39 @@ const INSTALL_COMMANDS = {
     }
 };
 
+/* Depuis Chrome 142 (oct. 2025), Edge 143 et Firefox 153 (21 juil. 2026), une
+   page d'origine publique qui joint une adresse loopback declenche une invite
+   de permission « Local Network Access ». L'option targetAddressSpace annonce
+   l'intention au navigateur : sans elle, la requete est rejetee au titre du
+   contenu mixte AVANT meme que l'invite ne s'affiche.
+   Les navigateurs qui ne la connaissent pas ignorent simplement l'option. */
+function bridgeFetch(path, options) {
+    return fetch(KATAGO_BRIDGE_URL + path, Object.assign({}, options, {
+        targetAddressSpace: "loopback"
+    }));
+}
+
+/* Safari ne propose aucune invite : il refuse purement et simplement le
+   loopback depuis une page HTTPS (bug WebKit 171934, ouvert depuis 2017).
+   Autant le dire clairement plutot que de laisser tourner un echec muet. */
+function isSafari() {
+    const ua = navigator.userAgent;
+    return /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR/.test(ua);
+}
+
+async function localNetworkPermission() {
+    if (!navigator.permissions || !navigator.permissions.query) return "unknown";
+    // Chrome 145 a scinde la permission unique en deux ; l'ancien nom reste un
+    // alias, mais on essaie le nom courant d'abord.
+    for (const name of ["loopback-network", "local-network-access"]) {
+        try {
+            const status = await navigator.permissions.query({ name });
+            if (status && status.state) return status.state;
+        } catch (e) { /* nom inconnu de ce navigateur : on essaie le suivant */ }
+    }
+    return "unknown";
+}
+
 function detectPlatform() {
     // userAgentData est le mecanisme moderne ; userAgent reste le repli.
     const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
@@ -427,7 +460,7 @@ async function checkBridge() {
         // trainer plusieurs secondes avant d'echouer.
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 2500);
-        const res = await fetch(KATAGO_BRIDGE_URL + "/health", { signal: ctrl.signal });
+        const res = await bridgeFetch("/health", { signal: ctrl.signal });
         clearTimeout(timer);
         const health = await res.json();
         if (health.ok) {
@@ -437,7 +470,20 @@ async function checkBridge() {
         }
         return health.ok;
     } catch (e) {
-        setBridgeStatus("absent", "Moteur non détecté sur cette machine");
+        // Un echec ici a trois causes possibles, et les confondre laisserait
+        // l'utilisateur relancer un moteur qui tourne deja tres bien.
+        if (isSafari()) {
+            setBridgeStatus("blocked",
+                "Safari interdit l'accès au moteur local. Utilisez Chrome, Edge ou Firefox.");
+            return false;
+        }
+        const perm = await localNetworkPermission();
+        if (perm === "denied") {
+            setBridgeStatus("blocked",
+                "Accès au réseau local refusé. Autorisez-le via l'icône à gauche de l'adresse.");
+        } else {
+            setBridgeStatus("absent", "Moteur non détecté sur cette machine");
+        }
         return false;
     }
 }

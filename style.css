@@ -1546,3 +1546,9 @@ button:disabled:hover {
   .install-cmd-row code { font-size: 0.68rem; }
   .os-tab { font-size: 0.66rem; }
 }
+
+/* Moteur present mais inatteignable : permission reseau local refusee, ou
+   Safari qui bloque le loopback sans proposer d'invite. Distinct de "absent" :
+   relancer le moteur n'y changerait rien. */
+.bridge-status.blocked { border-color: #7a3a3a; color: #e08a8a; }
+.bridge-status.blocked .bridge-dot { background: #e57373; box-shadow: 0 0 8px #e57373; }
