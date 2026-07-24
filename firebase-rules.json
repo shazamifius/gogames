@@ -1,151 +1,101 @@
 {
-  "//": "Regles de securite Realtime Database. A coller dans la console Firebase :",
-  "//_": "Realtime Database > Regles. Les commentaires sont acceptes par l'editeur.",
-
-  "//_limite": [
-    "CE QUE CES REGLES NE PEUVENT PAS FAIRE : verifier qu'une partie a eu lieu.",
-    "Le jeu tourne chez le joueur, avec son propre moteur. Le serveur n'a aucun",
-    "temoin independant. Ces regles rendent la triche lente, tracable et bornee",
-    "(un seul point de victoire a la fois, historique inalterable, cadence",
-    "limitee) — elles ne la rendent pas impossible. Pour un classement public,",
-    "il faudrait archiver la partie complete et l'auditer."
-  ],
-
   "rules": {
     ".read": false,
     ".write": false,
 
     "users": {
       "$uid": {
-        "//": "Profil lisible par tout compte connecte : on affiche le pseudo de l'adversaire.",
-        ".read": "auth != null",
-        ".write": "auth != null && auth.uid === $uid",
+        ".read": "auth != null && auth.uid === $uid",
 
         "nickname": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 20"
         },
-
-        "//_monotone": [
-          "Ces compteurs ne peuvent que monter, et d'une unite au maximum par",
-          "ecriture. Un script qui voudrait se hisser a 10000 victoires devrait",
-          "faire 10000 requetes distinctes, chacune soumise a la limite de cadence."
-        ],
         "wins": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 0 && (data.exists() ? (newData.val() >= data.val() && newData.val() <= data.val() + 1) : newData.val() <= 1)"
         },
         "losses": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 0 && (data.exists() ? (newData.val() >= data.val() && newData.val() <= data.val() + 1) : newData.val() <= 1)"
         },
         "gamesPlayed": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 0 && (data.exists() ? (newData.val() >= data.val() && newData.val() <= data.val() + 1) : newData.val() <= 1)"
         },
-
         "totalPoints": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 0 && (data.exists() ? (newData.val() >= data.val() && newData.val() <= data.val() + 400) : newData.val() <= 400)"
         },
         "level": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 500 && (data.exists() ? newData.val() >= data.val() : true)"
         },
         "currentXP": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
         },
-
-        "//_glicko": "Classement Glicko-2 : borne large mais finie, pour bloquer les valeurs absurdes.",
         "rating": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000"
         },
         "ratingDeviation": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= 20 && newData.val() <= 500"
         },
         "ratingVolatility": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 0.2"
         },
-
-        "//_cadence": [
-          "Anti-spam : deux parties ne peuvent pas etre enregistrees a moins de",
-          "20 secondes d'intervalle. Une partie de go, meme perdue tres vite,",
-          "prend plus longtemps que ca."
-        ],
         "lastGameAt": {
-          ".validate": "newData.isNumber() && newData.val() <= now + 5000 && (data.exists() ? newData.val() >= data.val() + 20000 : true)"
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
+          ".validate": "newData.isNumber() && newData.val() <= now + 5000"
         },
 
         "history": {
           "$entry": {
-            "//": "Append-only : une partie enregistree ne peut plus etre modifiee ni effacee.",
             ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists()",
             ".validate": "newData.hasChildren(['date', 'result', 'boardSize'])",
-
-            "date": {
-              "//": "Horodatage credible : ni dans le futur, ni antidate de plus d'une heure.",
-              ".validate": "newData.isNumber() && newData.val() <= now + 60000 && newData.val() >= now - 3600000"
-            },
-            "result":     { ".validate": "newData.isString() && newData.val().matches(/^(win|loss|draw)$/)" },
-            "boardSize":  { ".validate": "newData.isNumber() && (newData.val() === 9 || newData.val() === 13 || newData.val() === 19)" },
-            "opponent":   { ".validate": "newData.isString() && newData.val().length <= 40" },
-            "gameId":     { ".validate": "newData.isString() && newData.val().length <= 40" },
-            "aiVisits":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 50000" },
-            "moveCount":  { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 1000" },
-            "ratingAfter":{ ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000" },
-            "accuracy":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
-            "sgf":        { ".validate": "newData.isString() && newData.val().length <= 20000" },
-            "$autre":     { ".validate": false }
+            "date":        { ".validate": "newData.isNumber() && newData.val() <= now + 60000 && newData.val() >= now - 3600000" },
+            "result":      { ".validate": "newData.isString() && newData.val().matches(/^(win|loss|draw)$/)" },
+            "boardSize":   { ".validate": "newData.isNumber() && (newData.val() === 9 || newData.val() === 13 || newData.val() === 19)" },
+            "opponent":    { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "gameId":      { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "aiVisits":    { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 50000" },
+            "moveCount":   { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 1000" },
+            "ratingAfter": { ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000" },
+            "accuracy":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+            "sgf":         { ".validate": "newData.isString() && newData.val().length <= 20000" },
+            "$other":      { ".validate": false }
           }
-        },
-
-        "$autre": { ".validate": false }
+        }
       }
     },
 
     "games": {
-      "//": "Le lobby liste les parties publiques : la lecture demande un compte, pas plus.",
       ".read": "auth != null",
       ".indexOn": ["isPublic"],
 
       "$gameId": {
-        "//_write": [
-          "Ecriture autorisee si : la partie n'existe pas encore (creation), ou on",
-          "en est deja un joueur, ou on rejoint un emplacement blanc libre, ou la",
-          "partie est expiree (menage effectue par cleanUpOldGames)."
-        ],
-        ".write": "auth != null && (!data.exists() || data.child('players/black/uid').val() === auth.uid || data.child('players/white/uid').val() === auth.uid || !data.child('players/white').exists() || data.child('expiresAt').val() < now)",
-
-        ".validate": "newData.hasChildren(['status', 'boardSize']) || !newData.exists()",
+        ".write": "$gameId.matches(/^[0-9]{4}$/) && auth != null && ( (!data.exists() && newData.child('players/black/uid').val() === auth.uid && newData.child('status').val() === 'waiting') || (data.exists() && newData.exists() && (data.child('players/black/uid').val() === auth.uid || data.child('players/white/uid').val() === auth.uid)) || (data.exists() && newData.exists() && data.child('status').val() === 'waiting' && !data.child('players/white').exists() && newData.child('players/white/uid').val() === auth.uid) || (!newData.exists() && data.child('createdAt').val() < (now - 151200000)) )",
 
         "status":    { ".validate": "newData.isString() && newData.val().matches(/^(waiting|playing|finished)$/)" },
         "boardSize": { ".validate": "newData.isNumber() && (newData.val() === 9 || newData.val() === 13 || newData.val() === 19)" },
         "isPublic":  { ".validate": "newData.isBoolean()" },
-        "createdAt": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
-        "expiresAt": { ".validate": "newData.isNumber()" },
-        "currentPlayer":     { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2)" },
-        "consecutivePasses": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2" },
 
         "players": {
           "black": {
-            "//": "Un emplacement occupe ne peut plus etre repris par quelqu'un d'autre.",
-            ".validate": "!data.exists() || data.child('uid').val() === newData.child('uid').val()",
-            "uid":      { ".validate": "newData.isString()" },
-            "nickname": { ".validate": "newData.isString() && newData.val().length <= 20" },
-            "email":    { ".validate": "newData.isString() && newData.val().length <= 100" }
+            "uid": { ".validate": "!data.exists() || data.val() === newData.val()" }
           },
           "white": {
-            ".validate": "!data.exists() || data.child('uid').val() === newData.child('uid').val()",
-            "uid":      { ".validate": "newData.isString()" },
-            "nickname": { ".validate": "newData.isString() && newData.val().length <= 20" },
-            "email":    { ".validate": "newData.isString() && newData.val().length <= 100" }
+            "uid": { ".validate": "!data.exists() || data.val() === newData.val()" }
           }
         },
 
         "chat": {
           "$msg": {
-            "//": "Messages inalterables et signes par leur auteur reel.",
-            ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid",
-            ".validate": "newData.hasChildren(['uid', 'text', 'ts'])",
-            "uid":      { ".validate": "newData.val() === auth.uid" },
-            "text":     { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-            "nickname": { ".validate": "newData.isString() && newData.val().length <= 20" },
-            "ts":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
-            "$autre":   { ".validate": false }
+            "uid":  { ".validate": "newData.val() === auth.uid" },
+            "text": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" }
           }
         }
       }
