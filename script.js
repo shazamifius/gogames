@@ -619,8 +619,11 @@ function renderRatingChart(el, chrono) {
         .map(e => ({ r: e.ratingAfter, date: e.date, result: e.result }));
 
     if (pts.length < 2) {
-        el.innerHTML =
-            '<p class="rating-chart-empty">Joue des parties classées pour voir ta courbe grimper.</p>';
+        // On distingue « rien » de « une seule » pour ne pas laisser croire a un bug.
+        const msg = pts.length === 1
+            ? 'Encore une partie classée et ta courbe apparaît !'
+            : 'Aucune partie classée pour l\'instant. Affronte KataGo (connecté) ou un ami : les parties contre toi-même (hot-seat) ne comptent pas.';
+        el.innerHTML = '<p class="rating-chart-empty">' + msg + '</p>';
         return;
     }
 
@@ -1184,8 +1187,11 @@ async function endGame(message) {
             analyzeBtn.style.display = 'inline-block';
         }
 
-        // Mise à jour des stats + historique si on est un joueur
-        if (myColor === 1 || myColor === 2) {
+        // Mise à jour des stats + historique si on est un joueur — mais JAMAIS
+        // en hot-seat : jouer les deux camps contre soi-même ne doit compter ni
+        // en victoire/défaite, ni au classement, ni dans l'historique (sinon on
+        // gonfle artificiellement son palmarès en testant tout seul).
+        if ((myColor === 1 || myColor === 2) && !ownBothSides) {
             const { black, white } = computeScore(board);
             let myScore = (myColor === 1) ? black : white;
             const isWinner = myColor === winnerColor;
@@ -1195,21 +1201,18 @@ async function endGame(message) {
             updateMyStats(isWinner, myScore);
             const opponentNickname = myColor === 1 ? whiteNickname : blackNickname;
             const result = winnerColor === 0 ? 'draw' : (isWinner ? 'win' : 'loss');
-            // Classement Glicko-2. On ne classe pas le hot-seat (on jouerait
-            // contre soi-meme). Contre KataGo : note de reference selon la force.
-            // En multijoueur : note de depart de l'adversaire, enregistree dans
-            // la partie a la creation / jonction.
-            let ratingAfter = null;
-            if (!ownBothSides) {
-                if (typeof vsAI !== 'undefined' && vsAI) {
-                    const opp = (typeof KATAGO_RATINGS !== 'undefined' && KATAGO_RATINGS[aiVisits]) || { rating: 2600, rd: 80 };
-                    ratingAfter = updateMyRating(result, opp.rating, opp.rd);
-                } else {
-                    const oppColor = myColor === 1 ? 'white' : 'black';
-                    const oppData = (gameData.players && gameData.players[oppColor]) || {};
-                    const oppRating = typeof oppData.rating === 'number' ? oppData.rating : 1500;
-                    ratingAfter = updateMyRating(result, oppRating, 80);
-                }
+            // Classement Glicko-2. Contre KataGo : note de reference selon la
+            // force. En multijoueur : note de depart de l'adversaire, enregistree
+            // dans la partie a la creation / jonction.
+            let ratingAfter;
+            if (typeof vsAI !== 'undefined' && vsAI) {
+                const opp = (typeof KATAGO_RATINGS !== 'undefined' && KATAGO_RATINGS[aiVisits]) || { rating: 2600, rd: 80 };
+                ratingAfter = updateMyRating(result, opp.rating, opp.rd);
+            } else {
+                const oppColor = myColor === 1 ? 'white' : 'black';
+                const oppData = (gameData.players && gameData.players[oppColor]) || {};
+                const oppRating = typeof oppData.rating === 'number' ? oppData.rating : 1500;
+                ratingAfter = updateMyRating(result, oppRating, 80);
             }
             saveGameHistory(result, opponentNickname, BOARD_SIZE, ratingAfter);
         }
