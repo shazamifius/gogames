@@ -267,7 +267,21 @@
     <div class="end-game-message-container">
         <h2 id="endGameMessage" class="end-game-message"></h2>
         <p id="endGameCountdown" class="end-game-countdown"></p>
-        <button id="rematchBtn" class="btn-rematch" style="display:none;">⚔ Revanche</button>
+        <div class="end-game-actions">
+            <button id="analyzeGameBtn" class="btn-analyze" style="display:none;">🔬 Analyser la partie</button>
+            <button id="rematchBtn" class="btn-rematch" style="display:none;">⚔ Revanche</button>
+        </div>
+    </div>
+  </div>
+
+  <!-- Analyse de partie -->
+  <div id="analysisOverlay" class="analysis-overlay">
+    <div class="analysis-panel">
+      <div class="analysis-header">
+        <h2>Analyse de la partie</h2>
+        <button id="closeAnalysisBtn" class="analysis-close" title="Fermer">✕</button>
+      </div>
+      <div id="analysisBody" class="analysis-body"></div>
     </div>
   </div>
 
@@ -275,5 +289,6 @@
   <script src="glicko2.js"></script>
   <script src="script.js"></script>
   <script src="katago.js"></script>
+  <script src="analysis.js"></script>
 </body>
 </html>

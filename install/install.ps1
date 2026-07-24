@@ -147,7 +147,7 @@ Get-File "$SiteUrl/server/bridge.js" $bridgePath "bridge.js"
 # Le pont sert aussi le jeu : ainsi, meme sous Safari (qui refuse le loopback
 # depuis une page HTTPS distante), on peut jouer en ouvrant http://127.0.0.1:8081.
 Step "Telechargement du jeu (pour jouer aussi en local)"
-foreach ($f in @('index.html', 'script.js', 'katago.js', 'style.css', 'comment-ca-marche.html')) {
+foreach ($f in @('index.html', 'script.js', 'katago.js', 'glicko2.js', 'analysis.js', 'style.css', 'comment-ca-marche.html')) {
     $dest = Join-Path $Root $f
     Remove-Item $dest -ErrorAction SilentlyContinue
     Get-File "$SiteUrl/$f" $dest $f

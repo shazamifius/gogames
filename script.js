@@ -1178,6 +1178,12 @@ async function endGame(message) {
             if (rematchBtn) rematchBtn.style.display = 'inline-block';
         }
 
+        // Analyse — dès qu'il y a assez de coups (nécessite le moteur local).
+        const analyzeBtn = document.getElementById('analyzeGameBtn');
+        if (analyzeBtn && Array.isArray(moveList) && moveList.length >= 2) {
+            analyzeBtn.style.display = 'inline-block';
+        }
+
         // Mise à jour des stats + historique si on est un joueur
         if (myColor === 1 || myColor === 2) {
             const { black, white } = computeScore(board);
@@ -1561,6 +1567,10 @@ function resetGame() {
     const undoNotif = document.getElementById('undoNotification');
     if (undoNotif) undoNotif.style.display = 'none';
     if (confirmMoveUI) confirmMoveUI.style.display = 'none';
+    const analyzeBtn = document.getElementById('analyzeGameBtn');
+    if (analyzeBtn) analyzeBtn.style.display = 'none';
+    const analysisOverlay = document.getElementById('analysisOverlay');
+    if (analysisOverlay) analysisOverlay.classList.remove('visible');
     resetViewport();
     renderBoard();
     updateScore();

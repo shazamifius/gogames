@@ -60,6 +60,9 @@ for (const [label, file] of [['executable', KATAGO_EXE], ['reseau', KATAGO_MODEL
 
 let engineReady = false;
 const pending = new Map();
+// Requetes d'analyse : KataGo repond UNE ligne PAR tour demande (meme id,
+// champ turnNumber). On collecte jusqu'a avoir tous les tours attendus.
+const pendingMulti = new Map();
 let nextQueryId = 0;
 
 const engine = spawn(KATAGO_EXE, [
@@ -114,6 +117,22 @@ readline.createInterface({ input: engine.stdout }).on('line', (line) => {
   // on ne resout la promesse que sur la reponse finale.
   if (msg.isDuringSearch) return;
 
+  // Reponse d'analyse multi-tours ?
+  const multi = pendingMulti.get(msg.id);
+  if (multi) {
+    if (msg.error) {
+      pendingMulti.delete(msg.id);
+      multi.reject(new Error(msg.field ? `${msg.error} (champ ${msg.field})` : msg.error));
+      return;
+    }
+    multi.results.push(msg);
+    if (multi.results.length >= multi.expected) {
+      pendingMulti.delete(msg.id);
+      multi.resolve(multi.results);
+    }
+    return;
+  }
+
   const waiter = pending.get(msg.id);
   if (!waiter) return;
   pending.delete(msg.id);
@@ -123,6 +142,24 @@ readline.createInterface({ input: engine.stdout }).on('line', (line) => {
     waiter.resolve(msg);
   }
 });
+
+function askEngineAnalysis(query, expectedCount, timeoutMs = 300000) {
+  return new Promise((resolve, reject) => {
+    const id = `a${nextQueryId++}`;
+    query.id = id;
+    const timer = setTimeout(() => {
+      pendingMulti.delete(id);
+      reject(new Error('delai depasse pendant l\'analyse'));
+    }, timeoutMs);
+    pendingMulti.set(id, {
+      expected: expectedCount,
+      results: [],
+      resolve: (v) => { clearTimeout(timer); resolve(v); },
+      reject: (e) => { clearTimeout(timer); reject(e); }
+    });
+    engine.stdin.write(JSON.stringify(query) + '\n');
+  });
+}
 
 function askEngine(query, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
@@ -183,6 +220,59 @@ async function genmove({ moves, boardSize, komi, maxVisits }) {
     moveVisits: best.visits,
     pv: best.pv || []
   };
+}
+
+/* ========== Analyse d'une partie complete ========== */
+
+/**
+ * Analyse toutes les positions de la partie en UNE requete (analyzeTurns).
+ * Renvoie, pour chaque tour 0..n : le winrate et le scoreLead du joueur au
+ * trait (avec le meilleur jeu), et le meilleur coup selon KataGo.
+ *
+ * Le cout d'un coup se calcule ensuite cote client :
+ *   cout(t) = winrate[t] + winrate[t+1] - 1
+ * (le winrate que le joueur au trait a jete en jouant autre chose que le
+ * meilleur coup ; 0 si son coup etait optimal).
+ */
+async function analyzeGame({ moves, boardSize, komi, maxVisits }) {
+  const turns = [];
+  for (let t = 0; t <= moves.length; t++) turns.push(t);
+
+  const query = {
+    rules: 'chinese',
+    komi: komi,
+    boardXSize: boardSize,
+    boardYSize: boardSize,
+    moves: moves,
+    analyzeTurns: turns,
+    maxVisits: maxVisits,
+    includeOwnership: false,
+    includePolicy: false
+  };
+
+  const responses = await askEngineAnalysis(query, turns.length);
+
+  // Les reponses arrivent dans le desordre : on les range par turnNumber.
+  const byTurn = new Map();
+  for (const r of responses) {
+    const infos = r.moveInfos || [];
+    let best = infos[0];
+    for (const info of infos) { if (info.order === 0) { best = info; break; } }
+    const root = r.rootInfo || {};
+    byTurn.set(r.turnNumber, {
+      turn: r.turnNumber,
+      // Point de vue du joueur au trait a ce tour (SIDETOMOVE).
+      winrate: typeof root.winrate === 'number' ? root.winrate : (best ? best.winrate : null),
+      scoreLead: typeof root.scoreLead === 'number' ? root.scoreLead : (best ? best.scoreLead : null),
+      bestMove: best ? best.move : null,
+      visits: root.visits || 0
+    });
+  }
+
+  const out = [];
+  for (const t of turns) if (byTurn.has(t)) out.push(byTurn.get(t));
+  out.sort((a, b) => a.turn - b.turn);
+  return out;
 }
 
 /* ========== Serveur HTTP ========== */
@@ -284,6 +374,33 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, result);
     } catch (e) {
       console.error('[bridge] /genmove :', e.message);
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
+  if (req.url === '/analyze' && req.method === 'POST') {
+    if (!engineReady) {
+      sendJson(res, 503, { error: 'Le moteur démarre encore.' });
+      return;
+    }
+    try {
+      const body = await readBody(req);
+      const boardSize = [9, 13, 19].includes(body.boardSize) ? body.boardSize : 19;
+      const komi = typeof body.komi === 'number' ? body.komi : 7.5;
+      // Analyse : moins de visites que pour jouer (on en fait beaucoup), mais
+      // borne haute pour ne pas bloquer le GPU trop longtemps.
+      const maxVisits = Math.min(Math.max(parseInt(body.maxVisits, 10) || 100, 10), 2000);
+      const moves = Array.isArray(body.moves) ? body.moves : [];
+      if (moves.length === 0) { sendJson(res, 400, { error: 'aucun coup à analyser' }); return; }
+      if (moves.length > 400) { sendJson(res, 400, { error: 'partie trop longue (max 400 coups)' }); return; }
+
+      const started = Date.now();
+      const turns = await analyzeGame({ moves, boardSize, komi, maxVisits });
+      console.log(`[bridge] analyse de ${moves.length} coups en ${((Date.now() - started) / 1000).toFixed(1)} s`);
+      sendJson(res, 200, { turns, elapsedMs: Date.now() - started });
+    } catch (e) {
+      console.error('[bridge] /analyze :', e.message);
       sendJson(res, 500, { error: e.message });
     }
     return;
