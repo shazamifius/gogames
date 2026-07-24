@@ -1670,6 +1670,29 @@ button:disabled:hover {
   letter-spacing: 0;
 }
 
+/* Réinitialiser mes stats : action destructive, donc discrète par défaut et
+   franchement rouge au survol pour qu'on comprenne qu'elle efface tout. */
+.reset-stats-btn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 8px 10px;
+  font-size: 0.74rem;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.reset-stats-btn:hover {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.55);
+  background: rgba(255, 107, 107, 0.08);
+}
+
 /* Ligne d'aide dans les cartes du lobby */
 .box-hint {
   margin: -2px 0 2px;

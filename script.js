@@ -573,7 +573,10 @@ function renderStatsPanelContent(panel) {
             <div class="stats-panel-title" style="margin-top:12px;">Dernières parties</div>
             <p class="stats-label" style="font-size:0.72rem;">Chargement...</p>
         </div>
+        <button id="resetStatsBtn" class="reset-stats-btn" title="Remet à zéro victoires, défaites, points, niveau, classement et historique">↺ Réinitialiser mes statistiques</button>
     `;
+    const resetBtn = document.getElementById('resetStatsBtn');
+    if (resetBtn) resetBtn.onclick = () => resetMyStats(panel);
     // Charger l'historique de manière asynchrone
     if (myUid) {
         db.ref(`users/${myUid}/history`).limitToLast(30).once('value').then(snap => {
@@ -797,6 +800,44 @@ async function updateMyStats(isWinner, points) {
         console.error("Erreur sauvegarde stats:", e);
     }
 }
+
+/* Remet le palmarès et le classement à zéro. Utile pour effacer la pollution
+   des anciennes parties hot-seat (jouées contre soi-même) qui comptaient avant
+   qu'on les exclue. Efface aussi l'historique, sinon la courbe garderait de
+   vieux points. Le pseudo, lui, est conservé — on ne réinitialise pas le compte. */
+async function resetMyStats(panel) {
+    if (!myUid) return;
+    const ok = window.confirm(
+        'Remettre toutes tes statistiques à zéro ?\n\n' +
+        'Victoires, défaites, parties, points, niveau, classement Glicko-2 et ' +
+        'historique repartent de zéro. Ton pseudo est conservé.\n\n' +
+        'Cette action est définitive.'
+    );
+    if (!ok) return;
+
+    const fresh = {
+        wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0,
+        rating: (typeof Glicko2 !== 'undefined' ? Glicko2.DEFAULT_RATING : 1500),
+        ratingDeviation: (typeof Glicko2 !== 'undefined' ? Glicko2.DEFAULT_RD : 350),
+        ratingVolatility: (typeof Glicko2 !== 'undefined' ? Glicko2.DEFAULT_VOL : 0.06)
+    };
+    // On garde le pseudo local, on ne réécrit que les compteurs.
+    Object.assign(myStats, fresh);
+    updatePlayerInfoDisplay();
+
+    try {
+        await db.ref(`users/${myUid}`).update(fresh);
+        await db.ref(`users/${myUid}/history`).remove();
+        showMessage(lobbyMessage, 'Statistiques réinitialisées. À toi de rejouer !', 'lightgreen');
+    } catch (e) {
+        console.error('Erreur réinitialisation des stats :', e);
+        showMessage(lobbyMessage, "La réinitialisation a échoué (droits Firebase ?).", 'red');
+    }
+
+    // Redessine le panneau avec les valeurs fraîches.
+    if (panel) renderStatsPanelContent(panel);
+}
+
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text)
         .then(() => showMessage(lobbyMessage, "Code de la partie copié !", "lightgreen"))
