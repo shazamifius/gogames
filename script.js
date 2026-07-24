@@ -101,6 +101,11 @@ let gameRef = null;
 let hoverPoint = null;
 let gameListener = null;
 let moveInProgress = false;
+// Vrai quand le même compte occupe les deux couleurs (partie créée puis
+// rejointe soi-même, typiquement pour tester seul en deux fenêtres). On autorise
+// alors à jouer les deux camps — mode « hot-seat ». Sans ça, la reconnexion du
+// même compte retombe toujours sur Noir et Blanc devient injouable.
+let ownBothSides = false;
 let lastMove = null; // {x, y}
 let prisoners = { black: 0, white: 0 };
 let pendingMove = null; // {x, y} — coup en attente de confirmation (mobile)
@@ -817,7 +822,7 @@ function isLegalMove(x, y, color, state) {
 function playMove(x, y) {
     if (gameOver || moveInProgress) return;
     if (myColor === 0) { showMessage(gameMessage, "Mode Spectateur : Vous ne pouvez pas jouer.", "orange"); return; }
-    if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
+    if (myColor !== currentPlayer && !ownBothSides) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
 
     // On vérifie d'abord la légalité
     if (board[y][x] !== 0) { showMessage(gameMessage, "Cette case est déjà prise.", "orange"); return; }
@@ -873,7 +878,7 @@ function playMove(x, y) {
 function passTurn() {
     if (gameOver || moveInProgress) return;
     if (myColor === 0) return; // Spectator
-    if (myColor !== currentPlayer) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
+    if (myColor !== currentPlayer && !ownBothSides) { showMessage(gameMessage, "Ce n'est pas votre tour !", "orange"); return; }
     moveInProgress = true;
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     const nextPasses = consecutivePasses + 1;
@@ -1284,7 +1289,9 @@ function drawHoverPoint() {
         const radius = CELL_SIZE / 2.15;
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-        if (myColor === 1) {
+        // En hot-seat, la couleur affichée suit le camp au trait, pas myColor.
+        const previewColor = ownBothSides ? currentPlayer : myColor;
+        if (previewColor === 1) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         } else {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
@@ -1306,7 +1313,8 @@ function drawHoverPoint() {
 
         if (isLegal) {
             ctx.beginPath();
-            ctx.fillStyle = myColor === 1 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)';
+            const hoverColor = ownBothSides ? currentPlayer : myColor;
+            ctx.fillStyle = hoverColor === 1 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)';
             ctx.arc(cx, cy, CELL_SIZE / 2.2, 0, 2 * Math.PI);
             ctx.fill();
         } else {
@@ -1329,7 +1337,7 @@ function renderBoard() {
     drawHoverPoint();
 }
 function updateHoverPoint(e) {
-    if (gameOver || myColor !== currentPlayer || myColor === 0) {
+    if (gameOver || myColor === 0 || (myColor !== currentPlayer && !ownBothSides)) {
         hoverPoint = null;
         renderBoard();
         return;
@@ -1376,6 +1384,7 @@ function resetGame() {
     lastMove = null;
     prisoners = { black: 0, white: 0 };
     gameOver = false;
+    ownBothSides = false;
     pendingMove = null;
     moveList = [];
     gameTimerInitialSec = 0;
@@ -1428,6 +1437,11 @@ function setupGameListener() {
         lastMove = gameData.lastMove || null;
         prisoners = gameData.prisoners || { black: 0, white: 0 };
         moveList = gameData.moves || [];
+
+        // Est-ce que je tiens les deux camps ? (même compte des deux côtés)
+        const pl = gameData.players || {};
+        ownBothSides = myColor !== 0 && !!pl.black && !!pl.white &&
+            pl.black.uid === myUid && pl.white.uid === myUid;
 
         // Timer — synchroniser depuis Firebase
         if (gameData.timerInitialSec > 0) {
@@ -2009,7 +2023,7 @@ boardWrapper.addEventListener('touchend', e => {
         if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
             if (myColor === 0) {
                 showMessage(gameMessage, "Mode Spectateur : vous ne pouvez pas jouer.", "orange");
-            } else if (myColor !== currentPlayer) {
+            } else if (myColor !== currentPlayer && !ownBothSides) {
                 showMessage(gameMessage, "Ce n'est pas votre tour !", "orange");
             } else {
                 showPendingMove(x, y);
