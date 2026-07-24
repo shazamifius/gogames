@@ -308,6 +308,7 @@ async function startKataGoGame() {
     aiVisits = parseInt(document.getElementById("aiStrengthSelect").value);
     aiColor = humanColor === 1 ? 2 : 1;
 
+    stopBridgePolling();
     resetGame();
     updateBoardSize(size);
 
@@ -462,6 +463,18 @@ function setBridgeStatus(state, text) {
     if (panel) panel.style.display = state === "ready" ? "none" : "block";
 }
 
+// Revérification automatique : pendant que le moteur calibre (plusieurs
+// minutes au premier lancement), le site se re-teste tout seul et bascule au
+// vert dès qu'il répond. L'utilisateur n'a rien à cliquer.
+let bridgePollTimer = null;
+function stopBridgePolling() {
+    if (bridgePollTimer) { clearTimeout(bridgePollTimer); bridgePollTimer = null; }
+}
+function scheduleBridgePoll() {
+    stopBridgePolling();
+    bridgePollTimer = setTimeout(checkBridge, 4000);
+}
+
 async function checkBridge() {
     setBridgeStatus("checking", "Recherche du moteur…");
     try {
@@ -474,8 +487,10 @@ async function checkBridge() {
         const health = await res.json();
         if (health.ok) {
             setBridgeStatus("ready", `Moteur prêt — ${health.engine}`);
+            stopBridgePolling();
         } else {
             setBridgeStatus("starting", "Le moteur démarre (calibration GPU)…");
+            scheduleBridgePoll();
         }
         return health.ok;
     } catch (e) {
@@ -483,18 +498,23 @@ async function checkBridge() {
         // l'utilisateur relancer un moteur qui tourne deja tres bien.
         // Safari ne bloque QUE depuis une page HTTPS distante. Si l'on est deja
         // sur localhost, l'echec vient d'un moteur absent, pas du navigateur.
+        // Blocages durs (Safari, permission refusée) : inutile de re-tester en
+        // boucle, on arrête le sondage. Moteur simplement absent : on continue.
         if (isSafari() && !isLoopbackOrigin()) {
             setBridgeStatus("blocked",
                 "Safari ne peut pas joindre le moteur depuis ce site. Installez le moteur, " +
                 "puis ouvrez http://127.0.0.1:8081 dans Safari pour jouer.");
+            stopBridgePolling();
             return false;
         }
         const perm = await localNetworkPermission();
         if (perm === "denied") {
             setBridgeStatus("blocked",
                 "Accès au réseau local refusé. Autorisez-le via l'icône à gauche de l'adresse.");
+            stopBridgePolling();
         } else {
-            setBridgeStatus("absent", "Moteur non détecté sur cette machine");
+            setBridgeStatus("absent", "Moteur non détecté — lancez le pont, la détection est automatique.");
+            scheduleBridgePoll();
         }
         return false;
     }

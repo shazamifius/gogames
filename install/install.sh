@@ -186,12 +186,14 @@ KATAGO_BIN="$KATAGO_BIN" exec "$NODE_BIN" bridge.js
 EOF
 chmod +x "$LAUNCHER"
 
-printf '\n\033[32m  Installation terminee.\033[0m\n'
-say "Dossier : $ROOT"
-say "Relancer plus tard : $LAUNCHER"
-printf '\n\033[33m  Le tout premier demarrage calibre votre GPU et prend plusieurs\n'
-printf '  minutes. Les suivants sont immediats.\033[0m\n\n'
-say "Ouvrez ensuite $SITE_URL et cliquez sur Jouer contre KataGo."
-printf '\n'
+printf '\n\033[32m  Installation terminee !\033[0m\n\n'
+printf '\033[36m  CE QU'\''IL SE PASSE MAINTENANT :\033[0m\n'
+printf '   1. Le pont KataGo va demarrer, juste en dessous.\n'
+printf '\033[33m   2. La PREMIERE FOIS, il calibre ton GPU : quelques minutes.\n'
+printf '      Attends la banniere   [OK] MOTEUR PRET.\033[0m\n'
+printf '   3. Va sur le site, connecte-toi, ouvre « Jouer contre KataGo ».\n'
+printf '      Le bouton passe au vert tout seul des que le moteur est pret.\n\n'
+printf '\033[36m      %s\033[0m\n\n' "$SITE_URL"
+printf '  Pour rejouer plus tard : %s\n\n' "$LAUNCHER"
 
 exec "$LAUNCHER"

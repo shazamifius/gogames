@@ -87,7 +87,18 @@ readline.createInterface({ input: engine.stderr }).on('line', (line) => {
   console.log('[katago]', line);
   if (!engineReady && /ready to begin handling requests/i.test(line)) {
     engineReady = true;
-    console.log(`[bridge] moteur pret. En ecoute sur http://${HOST}:${PORT}`);
+    // Banniere volontairement voyante : c'est LE signal que l'utilisateur attend.
+    console.log('');
+    console.log('  ============================================');
+    console.log('   [OK]  MOTEUR PRET');
+    console.log('');
+    console.log('   Retourne sur le site et clique');
+    console.log('   « J\'ai lance le moteur - reverifier ».');
+    console.log('   (Le site peut aussi basculer au vert tout seul.)');
+    console.log('');
+    console.log('   Laisse CETTE fenetre ouverte pendant que tu joues.');
+    console.log('  ============================================');
+    console.log('');
   }
 });
 
@@ -284,9 +295,32 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { error: 'route inconnue' });
 });
 
+// Un pont deja lance occupe le port : au lieu d'une stack trace, on l'explique
+// et on sort proprement. C'est un cas normal (double lancement, fenetre restee
+// ouverte), pas une erreur pour l'utilisateur.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log('');
+    console.log('  ============================================');
+    console.log(`   Un moteur tourne DEJA sur le port ${PORT}.`);
+    console.log('');
+    console.log('   C\'est sans doute une autre fenetre du pont,');
+    console.log('   deja prete. Tu peux fermer celle-ci et');
+    console.log('   retourner jouer sur le site.');
+    console.log('  ============================================');
+    console.log('');
+    engine.kill();
+    process.exit(0);
+  }
+  console.error('[bridge] erreur serveur :', err.message);
+  engine.kill();
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, () => {
-  console.log(`[bridge] HTTP en ecoute sur http://${HOST}:${PORT}`);
-  console.log('[bridge] demarrage de KataGo... (le tout premier lancement calibre OpenCL, comptez plusieurs minutes)');
+  console.log(`[bridge] En ecoute sur http://${HOST}:${PORT}`);
+  console.log('[bridge] Demarrage de KataGo...');
+  console.log('[bridge] PREMIERE FOIS : calibration du GPU, quelques minutes. Patiente.');
 });
 
 process.on('SIGINT', () => { engine.kill(); process.exit(0); });

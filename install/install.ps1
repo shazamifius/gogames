@@ -180,14 +180,21 @@ if ($AutoStart) {
 # ---------- Demarrage ----------
 
 Write-Host ""
-Write-Host "  Installation terminee." -ForegroundColor Green
-Say "Dossier : $Root"
-Say "Relancer plus tard : $launcher"
+Write-Host "  Installation terminee !" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Le tout premier demarrage calibre votre GPU et prend plusieurs" -ForegroundColor Yellow
-Write-Host "  minutes. Les suivants sont immediats." -ForegroundColor Yellow
+Write-Host "  CE QU'IL SE PASSE MAINTENANT :" -ForegroundColor Cyan
+Write-Host "   1. Une fenetre « Pont KataGo » vient de s'ouvrir."
+Write-Host "   2. La PREMIERE FOIS, elle calibre ton GPU : quelques minutes." -ForegroundColor Yellow
+Write-Host "      Attends qu'elle affiche   [OK] MOTEUR PRET." -ForegroundColor Yellow
+Write-Host "   3. Va sur le site, connecte-toi, ouvre « Jouer contre KataGo »."
+Write-Host "      Le bouton passe au vert tout seul des que le moteur est pret."
 Write-Host ""
-Say "Ouvrez ensuite $SiteUrl et cliquez sur Jouer contre KataGo."
+Write-Host "      $SiteUrl" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Pour rejouer plus tard, relance simplement :" -ForegroundColor DarkGray
+Write-Host "   $launcher" -ForegroundColor DarkGray
 Write-Host ""
 
+# La fenetre du pont s'ouvre a part : l'utilisateur y verra la calibration
+# puis la banniere MOTEUR PRET.
 Start-Process -FilePath $launcher -WorkingDirectory $Root
