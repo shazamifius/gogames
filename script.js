@@ -542,6 +542,7 @@ function renderStatsPanelContent(panel) {
             <div class="stats-rating-value">◈ ${rating} <span class="stats-rating-rd">± ${rd}</span></div>
             <div class="stats-rating-label">Classement Glicko-2${provisoire}</div>
         </div>
+        <div id="ratingChart" class="rating-chart"></div>
         <div class="stats-xp">
             <div class="stats-xp-label">
                 <span>Niveau ${myStats.level}</span>
@@ -574,11 +575,17 @@ function renderStatsPanelContent(panel) {
     `;
     // Charger l'historique de manière asynchrone
     if (myUid) {
-        db.ref(`users/${myUid}/history`).limitToLast(5).once('value').then(snap => {
+        db.ref(`users/${myUid}/history`).limitToLast(30).once('value').then(snap => {
             const histSection = document.getElementById('statsPanelHistory');
+            const chartEl = document.getElementById('ratingChart');
+
+            // Ordre chronologique (le plus ancien en premier) pour la courbe.
+            const chrono = [];
+            snap.forEach(child => chrono.push(child.val()));
+            renderRatingChart(chartEl, chrono);
+
             if (!histSection) return;
-            const entries = [];
-            snap.forEach(child => entries.unshift(child.val())); // plus récent en premier
+            const entries = chrono.slice(-5).reverse(); // 5 plus récentes, récent en premier
             if (entries.length === 0) {
                 histSection.innerHTML = `
                     <div class="stats-panel-title" style="margin-top:12px;">Dernières parties</div>
@@ -599,6 +606,123 @@ function renderStatsPanelContent(panel) {
                 ${rows}`;
         }).catch(() => {});
     }
+}
+
+/* Courbe de progression du classement : une seule serie (ma note au fil des
+   parties classees), donc pas de legende — le titre suffit. Ligne doree (accent
+   du site) sur fond sombre, aire degradee, dernier point mis en valeur, repere
+   au niveau de depart, et survol pour lire chaque point. */
+function renderRatingChart(el, chrono) {
+    if (!el) return;
+    const pts = (chrono || [])
+        .filter(e => e && typeof e.ratingAfter === 'number')
+        .map(e => ({ r: e.ratingAfter, date: e.date, result: e.result }));
+
+    if (pts.length < 2) {
+        el.innerHTML =
+            '<p class="rating-chart-empty">Joue des parties classées pour voir ta courbe grimper.</p>';
+        return;
+    }
+
+    const W = 300, H = 120, padL = 8, padR = 8, padT = 22, padB = 18;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = pts.length;
+    const ratings = pts.map(p => p.r);
+    const minR = Math.min(...ratings), maxR = Math.max(...ratings);
+    const range = maxR - minR;
+    const pad = Math.max(12, range * 0.2);
+    const lo = minR - pad, hi = maxR + pad;
+
+    const x = i => padL + (n === 1 ? plotW / 2 : plotW * i / (n - 1));
+    const y = r => padT + plotH * (1 - (r - lo) / (hi - lo));
+    const base = padT + plotH;
+
+    const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join(' ');
+    const area = `M ${padL},${base} L ${pts.map((p, i) => `${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join(' L ')} L ${x(n - 1).toFixed(1)},${base} Z`;
+
+    const startY = y(pts[0].r).toFixed(1);
+    const delta = Math.round(pts[n - 1].r - pts[0].r);
+    const deltaTxt = delta >= 0 ? `+${delta}` : `${delta}`;
+    const deltaClass = delta >= 0 ? 'up' : 'down';
+    const last = pts[n - 1];
+
+    el.innerHTML = `
+        <div class="rating-chart-head">
+            <span class="rating-chart-title">Progression · ${n} partie${n > 1 ? 's' : ''} classée${n > 1 ? 's' : ''}</span>
+            <span class="rating-chart-delta ${deltaClass}">${deltaTxt}</span>
+        </div>
+        <svg class="rating-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+             aria-label="Courbe du classement : de ${Math.round(pts[0].r)} à ${Math.round(last.r)}">
+            <defs>
+                <linearGradient id="ratingFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--primary-wood)" stop-opacity="0.28"/>
+                    <stop offset="100%" stop-color="var(--primary-wood)" stop-opacity="0"/>
+                </linearGradient>
+            </defs>
+            <line class="rating-chart-baseline" x1="${padL}" y1="${startY}" x2="${W - padR}" y2="${startY}"/>
+            <path class="rating-chart-area" d="${area}" fill="url(#ratingFill)"/>
+            <polyline class="rating-chart-line" points="${line}"/>
+            <circle class="rating-chart-end" cx="${x(n - 1).toFixed(1)}" cy="${y(last.r).toFixed(1)}" r="3.5"/>
+            <g class="rating-chart-hover" style="display:none;">
+                <line class="rating-chart-guide" y1="${padT}" y2="${base}"/>
+                <circle class="rating-chart-dot" r="3.5"/>
+            </g>
+            <text class="rating-chart-max" x="${padL}" y="${padT - 8}">${Math.round(maxR)}</text>
+            <text class="rating-chart-min" x="${padL}" y="${H - 6}">${Math.round(minR)}</text>
+        </svg>
+        <div class="rating-chart-tip" style="display:none;"></div>
+    `;
+
+    // Survol : point le plus proche horizontalement.
+    const svg = el.querySelector('.rating-chart-svg');
+    const hover = el.querySelector('.rating-chart-hover');
+    const guide = el.querySelector('.rating-chart-guide');
+    const dot = el.querySelector('.rating-chart-dot');
+    const tip = el.querySelector('.rating-chart-tip');
+
+    svg.addEventListener('mousemove', (ev) => {
+        const rect = svg.getBoundingClientRect();
+        const frac = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+        const i = Math.round(frac * (n - 1));
+        const p = pts[i];
+        const px = x(i), py = y(p.r);
+        hover.style.display = '';
+        guide.setAttribute('x1', px); guide.setAttribute('x2', px);
+        dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+        const d = p.date ? new Date(p.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+        const icon = p.result === 'win' ? '🏆' : p.result === 'loss' ? '✗' : '—';
+        tip.style.display = 'block';
+        tip.textContent = `${Math.round(p.r)} · ${icon} ${d}`;
+        tip.style.left = (frac * 100) + '%';
+    });
+    svg.addEventListener('mouseleave', () => {
+        hover.style.display = 'none';
+        tip.style.display = 'none';
+    });
+}
+
+/* Met a jour ma note Glicko-2 apres une partie classee, contre la note (et
+   l'incertitude) de l'adversaire. Ecrit dans Firebase et renvoie la nouvelle
+   note arrondie, ou null si la partie n'est pas classee. */
+function updateMyRating(result, oppRating, oppRD) {
+    if (!myUid || myColor === 0 || typeof Glicko2 === 'undefined') return null;
+    const score = result === 'win' ? 1 : result === 'draw' ? 0.5 : 0;
+    const current = {
+        rating: myStats.rating || Glicko2.DEFAULT_RATING,
+        rd: myStats.ratingDeviation || Glicko2.DEFAULT_RD,
+        vol: myStats.ratingVolatility || Glicko2.DEFAULT_VOL
+    };
+    const next = Glicko2.update(current, [{ rating: oppRating, rd: oppRD, score }]);
+    myStats.rating = next.rating;
+    myStats.ratingDeviation = next.rd;
+    myStats.ratingVolatility = next.vol;
+    db.ref(`users/${myUid}`).update({
+        rating: next.rating,
+        ratingDeviation: next.rd,
+        ratingVolatility: next.vol
+    }).catch((e) => console.error('Sauvegarde classement :', e));
+    updatePlayerInfoDisplay();
+    return Math.round(next.rating);
 }
 
 function toggleStatsPanel() {
@@ -1065,10 +1189,22 @@ async function endGame(message) {
             updateMyStats(isWinner, myScore);
             const opponentNickname = myColor === 1 ? whiteNickname : blackNickname;
             const result = winnerColor === 0 ? 'draw' : (isWinner ? 'win' : 'loss');
-            // Classement Glicko-2 : pour l'instant, seules les parties contre
-            // KataGo sont classees (applyGlickoResult renvoie null sinon).
+            // Classement Glicko-2. On ne classe pas le hot-seat (on jouerait
+            // contre soi-meme). Contre KataGo : note de reference selon la force.
+            // En multijoueur : note de depart de l'adversaire, enregistree dans
+            // la partie a la creation / jonction.
             let ratingAfter = null;
-            if (typeof applyGlickoResult === 'function') ratingAfter = applyGlickoResult(result);
+            if (!ownBothSides) {
+                if (typeof vsAI !== 'undefined' && vsAI) {
+                    const opp = (typeof KATAGO_RATINGS !== 'undefined' && KATAGO_RATINGS[aiVisits]) || { rating: 2600, rd: 80 };
+                    ratingAfter = updateMyRating(result, opp.rating, opp.rd);
+                } else {
+                    const oppColor = myColor === 1 ? 'white' : 'black';
+                    const oppData = (gameData.players && gameData.players[oppColor]) || {};
+                    const oppRating = typeof oppData.rating === 'number' ? oppData.rating : 1500;
+                    ratingAfter = updateMyRating(result, oppRating, 80);
+                }
+            }
             saveGameHistory(result, opponentNickname, BOARD_SIZE, ratingAfter);
         }
 
@@ -1694,7 +1830,9 @@ createGameBtn.onclick = async () => {
             // L'e-mail n'est jamais relu par l'application et le nœud games est
             // lisible sans authentification : le stocker exposait publiquement
             // l'adresse des joueurs. Le pseudo suffit à l'affichage.
-            players: { black: { uid: myUid, nickname: myNickname } },
+            // On enregistre sa note AVANT la partie : a la fin, chaque joueur
+            // met a jour son classement contre la note de depart de l'adversaire.
+            players: { black: { uid: myUid, nickname: myNickname, rating: Math.round(myStats.rating || 1500) } },
             board: board,
             currentPlayer: currentPlayer,
             history: history,
@@ -1756,7 +1894,7 @@ async function joinGame(targetGameId = null) {
         if (gameData.status === 'waiting' && !gameData.players.white) {
             // Rejoindre en tant que joueur Blanc
             await gameRef.update({
-                'players/white': { uid: myUid, nickname: myNickname },
+                'players/white': { uid: myUid, nickname: myNickname, rating: Math.round(myStats.rating || 1500) },
                 status: 'playing'
             });
             myColor = 2;

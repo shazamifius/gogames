@@ -85,10 +85,12 @@
 
         "players": {
           "black": {
-            "uid": { ".validate": "!data.exists() || data.val() === newData.val()" }
+            "uid": { ".validate": "!data.exists() || data.val() === newData.val()" },
+            "rating": { ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000" }
           },
           "white": {
-            "uid": { ".validate": "!data.exists() || data.val() === newData.val()" }
+            "uid": { ".validate": "!data.exists() || data.val() === newData.val()" },
+            "rating": { ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000" }
           }
         },
 
