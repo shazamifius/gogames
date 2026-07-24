@@ -37,6 +37,49 @@ let gtpMoves = [];
 const AI_RESIGN_WINRATE = 0.04;
 const AI_RESIGN_MIN_MOVES = 30; // jamais d'abandon dans l'ouverture
 
+// Note de reference de KataGo selon sa force (nombre de visites). Ces valeurs
+// sont un point de depart a CALIBRER : elles fixent l'echelle du classement.
+// RD faible : la force du moteur a un niveau donne est stable et bien connue.
+const KATAGO_RATINGS = {
+    100:   { rating: 2200, rd: 60 },
+    500:   { rating: 2600, rd: 60 },
+    2000:  { rating: 2900, rd: 60 },
+    10000: { rating: 3200, rd: 60 }
+};
+
+/* Met a jour le classement Glicko-2 du joueur apres une partie contre KataGo.
+   Renvoie la nouvelle note, ou null si la partie n'est pas classee (invite, ou
+   partie multijoueur qui sera geree separement). */
+function applyGlickoResult(result) {
+    if (!vsAI || !myUid || typeof Glicko2 === "undefined") return null;
+
+    const opp = KATAGO_RATINGS[aiVisits] || { rating: 2600, rd: 80 };
+    const score = result === "win" ? 1 : result === "draw" ? 0.5 : 0;
+
+    const current = {
+        rating: myStats.rating || Glicko2.DEFAULT_RATING,
+        rd: myStats.ratingDeviation || Glicko2.DEFAULT_RD,
+        vol: myStats.ratingVolatility || Glicko2.DEFAULT_VOL
+    };
+    const next = Glicko2.update(current, [{ rating: opp.rating, rd: opp.rd, score }]);
+
+    myStats.rating = next.rating;
+    myStats.ratingDeviation = next.rd;
+    myStats.ratingVolatility = next.vol;
+
+    // On n'ecrit PAS lastGameAt ici : la regle anti-spam impose 20 s entre deux
+    // ecritures de ce champ, ce qui rejetterait une seconde partie rapide et,
+    // l'update etant atomique, ferait echouer la sauvegarde du classement.
+    db.ref(`users/${myUid}`).update({
+        rating: next.rating,
+        ratingDeviation: next.rd,
+        ratingVolatility: next.vol
+    }).catch((e) => console.error("Sauvegarde classement :", e));
+
+    if (typeof updatePlayerInfoDisplay === "function") updatePlayerInfoDisplay();
+    return Math.round(next.rating);
+}
+
 /* ========== Conversion de coordonnees ========== */
 /* Valide par test exhaustif aller-retour sur les plateaux 9x9, 13x13 et 19x19. */
 

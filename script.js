@@ -93,7 +93,8 @@ let currentPlayer = 1;
 let myColor = null;
 let myUid = null;
 let myNickname = null;
-let myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0 };
+let myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0,
+    rating: 1500, ratingDeviation: 350, ratingVolatility: 0.06 };
 let gameId = null;
 let consecutivePasses = 0;
 let gameOver = false;
@@ -317,16 +318,25 @@ function respondToUndo(accepted) {
 }
 
 // ========== Historique des parties ==========
-async function saveGameHistory(result, opponentNickname, boardSz) {
+async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter) {
     if (!myUid || myColor === 0) return;
     try {
-        await db.ref(`users/${myUid}/history`).push({
+        // Entree d'historique. ratingAfter (classement apres la partie) et
+        // moveCount alimenteront le graphe de progression et les statistiques.
+        const entry = {
             date: Date.now(),
             result,          // 'win' | 'loss' | 'draw'
             opponent: opponentNickname || '?',
             boardSize: boardSz,
-            gameId
-        });
+            gameId: String(gameId)
+        };
+        if (typeof ratingAfter === 'number') entry.ratingAfter = ratingAfter;
+        if (Array.isArray(moveList)) entry.moveCount = Math.max(2, moveList.length);
+        // Partie contre KataGo : on garde la force affrontee.
+        if (typeof vsAI !== 'undefined' && vsAI && typeof aiVisits === 'number') {
+            entry.aiVisits = aiVisits;
+        }
+        await db.ref(`users/${myUid}/history`).push(entry);
     } catch(e) { console.error("Erreur historique:", e); }
 }
 
@@ -501,9 +511,9 @@ function updatePlayerInfoDisplay() {
         <div class="profile-display">
             <span class="profile-name">${escapeHtml(myNickname)}</span>
             <div class="profile-stats">
+                <span class="stat-badge rating-badge" title="Classement Glicko-2">◈ ${Math.round(myStats.rating || 1500)}</span>
                 <span class="stat-badge level-badge">Niv. ${myStats.level}</span>
                 <span class="stat-badge win-badge">🏆 ${myStats.wins}</span>
-                <span class="stat-badge points-badge">★ ${Math.floor(myStats.totalPoints)}</span>
             </div>
             <div class="xp-bar-container" title="XP: ${Math.floor(myStats.currentXP)} / ${xpNeeded}">
                 <div class="xp-bar-fill" style="width: ${(myStats.currentXP / xpNeeded) * 100}%"></div>
@@ -520,8 +530,16 @@ function updatePlayerInfoDisplay() {
 function renderStatsPanelContent(panel) {
     const xpNeeded = myStats.level * 100;
     const xpPct = Math.round((myStats.currentXP / xpNeeded) * 100);
+    const rating = Math.round(myStats.rating || 1500);
+    const rd = Math.round(myStats.ratingDeviation || 350);
+    // RD élevé = note encore incertaine : on le dit clairement.
+    const provisoire = rd > 150 ? ' <span class="rating-prov">(provisoire)</span>' : '';
     panel.innerHTML = `
         <div class="stats-panel-title">Profil joueur</div>
+        <div class="stats-rating">
+            <div class="stats-rating-value">◈ ${rating} <span class="stats-rating-rd">± ${rd}</span></div>
+            <div class="stats-rating-label">Classement Glicko-2${provisoire}</div>
+        </div>
         <div class="stats-xp">
             <div class="stats-xp-label">
                 <span>Niveau ${myStats.level}</span>
@@ -1045,7 +1063,11 @@ async function endGame(message) {
             updateMyStats(isWinner, myScore);
             const opponentNickname = myColor === 1 ? whiteNickname : blackNickname;
             const result = winnerColor === 0 ? 'draw' : (isWinner ? 'win' : 'loss');
-            saveGameHistory(result, opponentNickname, BOARD_SIZE);
+            // Classement Glicko-2 : pour l'instant, seules les parties contre
+            // KataGo sont classees (applyGlickoResult renvoie null sinon).
+            let ratingAfter = null;
+            if (typeof applyGlickoResult === 'function') ratingAfter = applyGlickoResult(result);
+            saveGameHistory(result, opponentNickname, BOARD_SIZE, ratingAfter);
         }
 
     } catch (err) {
@@ -1598,7 +1620,8 @@ saveNicknameBtn.onclick = async () => {
 
     if (existing.level === undefined) {
         // Compte réellement neuf : on initialise.
-        myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0 };
+        myStats = { wins: 0, losses: 0, totalPoints: 0, level: 1, currentXP: 0, gamesPlayed: 0,
+            rating: 1500, ratingDeviation: 350, ratingVolatility: 0.06 };
         await db.ref(`users/${myUid}`).update({ nickname, ...myStats });
     } else {
         // Compte existant : on ne touche qu'au pseudo.
@@ -1622,7 +1645,10 @@ auth.onAuthStateChanged(async user => {
                 totalPoints: userData.totalPoints || 0,
                 level: userData.level || 1,
                 currentXP: userData.currentXP || 0,
-                gamesPlayed: userData.gamesPlayed || 0
+                gamesPlayed: userData.gamesPlayed || 0,
+                rating: userData.rating || 1500,
+                ratingDeviation: userData.ratingDeviation || 350,
+                ratingVolatility: userData.ratingVolatility || 0.06
             };
         } else {
             myNickname = null;

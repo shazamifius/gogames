@@ -1566,3 +1566,40 @@ button:disabled:hover {
 .how-link:hover {
   border-bottom-color: var(--primary-wood);
 }
+
+/* ========== Classement Glicko-2 ========== */
+.rating-badge {
+  background: linear-gradient(135deg, #5b7089, #3f5065);
+  color: #fff;
+  border: 1px solid #6d84a0;
+}
+
+.stats-rating {
+  text-align: center;
+  padding: 6px 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-glass);
+}
+.stats-rating-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #9fb4cc;
+  letter-spacing: 0.5px;
+}
+.stats-rating-rd {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.stats-rating-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.rating-prov {
+  color: var(--primary-wood);
+  text-transform: none;
+  letter-spacing: 0;
+}
