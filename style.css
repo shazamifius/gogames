@@ -1552,3 +1552,17 @@ button:disabled:hover {
    relancer le moteur n'y changerait rien. */
 .bridge-status.blocked { border-color: #7a3a3a; color: #e08a8a; }
 .bridge-status.blocked .bridge-dot { background: #e57373; box-shadow: 0 0 8px #e57373; }
+
+/* Lien vers la page d'explication, dans l'encadre KataGo */
+.how-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--primary-wood);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  align-self: center;
+}
+.how-link:hover {
+  border-bottom-color: var(--primary-wood);
+}

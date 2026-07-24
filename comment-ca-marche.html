@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comment jouer contre KataGo — Online Go Game</title>
+<style>
+  :root {
+    --ground: #17171c;
+    --panel: #212129;
+    --panel-2: #2a2a33;
+    --line: rgba(255,255,255,0.09);
+    --ink: #ece9e3;
+    --muted: #9d9a92;
+    --gold: #c9a468;
+    --gold-strong: #d8b578;
+    --gold-soft: rgba(201,164,104,0.13);
+    --wood: #b78b4f;
+    --bamboo: #94b063;
+    --warn: #dd8a7f;
+    --stone-black: #101015;
+    --stone-white: #f0ece3;
+    --shadow: 0 18px 50px rgba(0,0,0,0.45);
+
+    --font-display: Georgia, 'Times New Roman', serif;
+    --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #ece5d7;
+      --panel: #f6f1e7;
+      --panel-2: #efe7d6;
+      --line: rgba(60,45,20,0.15);
+      --ink: #292520;
+      --muted: #6b6356;
+      --gold: #9a7534;
+      --gold-strong: #82611f;
+      --gold-soft: rgba(154,117,52,0.11);
+      --wood: #a97e46;
+      --bamboo: #566f2a;
+      --warn: #ab4c3c;
+      --stone-black: #1a1712;
+      --stone-white: #fcf9f2;
+      --shadow: 0 18px 44px rgba(80,60,25,0.16);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #ece5d7; --panel: #f6f1e7; --panel-2: #efe7d6;
+    --line: rgba(60,45,20,0.15); --ink: #292520; --muted: #6b6356;
+    --gold: #9a7534; --gold-strong: #82611f; --gold-soft: rgba(154,117,52,0.11);
+    --wood: #a97e46; --bamboo: #566f2a; --warn: #ab4c3c;
+    --stone-black: #1a1712; --stone-white: #fcf9f2;
+    --shadow: 0 18px 44px rgba(80,60,25,0.16);
+  }
+  :root[data-theme="dark"] {
+    --ground: #17171c; --panel: #212129; --panel-2: #2a2a33;
+    --line: rgba(255,255,255,0.09); --ink: #ece9e3; --muted: #9d9a92;
+    --gold: #c9a468; --gold-strong: #d8b578; --gold-soft: rgba(201,164,104,0.13);
+    --wood: #b78b4f; --bamboo: #94b063; --warn: #dd8a7f;
+    --stone-black: #101015; --stone-white: #f0ece3;
+    --shadow: 0 18px 50px rgba(0,0,0,0.45);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 78% -8%, var(--gold-soft), transparent 55%),
+      var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 22px; }
+
+  .topbar { max-width: 820px; margin: 0 auto; padding: 20px 22px 0; }
+  .back {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    font-size: 0.86rem; color: var(--muted); font-weight: 600;
+  }
+  .back:hover { color: var(--gold); }
+
+  header.hero { padding: 40px 0 34px; }
+  .eyebrow {
+    font-size: 0.74rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--gold); font-weight: 600; margin: 0 0 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--gold); opacity: 0.6; }
+  h1 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(2.3rem, 6vw, 3.7rem); line-height: 1.04;
+    letter-spacing: -0.01em; text-wrap: balance; margin: 0 0 20px;
+  }
+  h1 em { color: var(--gold); font-style: italic; }
+  .lede {
+    font-size: clamp(1.05rem, 2.4vw, 1.28rem); color: var(--muted);
+    max-width: 60ch; margin: 0;
+  }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .diagram-shell {
+    margin: 40px 0 8px; background: linear-gradient(160deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
+    padding: 30px 26px 24px; overflow-x: auto;
+  }
+  .flow {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch;
+    gap: 0; min-width: 660px; position: relative;
+  }
+  .node {
+    background: var(--ground); border: 1px solid var(--line); border-radius: 13px;
+    padding: 18px 16px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 9px; position: relative;
+  }
+  .node .glyph {
+    width: 46px; height: 46px; border-radius: 11px; display: grid; place-items: center; flex-shrink: 0;
+    background: var(--gold-soft); border: 1px solid var(--line);
+  }
+  .node h3 { margin: 0; font-size: 0.98rem; font-weight: 650; }
+  .node p { margin: 0; font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+  .node .where {
+    font-size: 0.66rem; letter-spacing: 0.13em; text-transform: uppercase;
+    font-weight: 700; padding: 3px 9px; border-radius: 20px; margin-top: 2px;
+  }
+  .where.cloud { color: var(--bamboo); background: color-mix(in srgb, var(--bamboo) 15%, transparent); }
+  .where.local { color: var(--gold); background: var(--gold-soft); }
+
+  .connector {
+    position: relative; min-width: 54px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 0 4px;
+  }
+  .connector .rail { width: 100%; height: 2px; background: var(--line); position: relative; border-radius: 2px; }
+  .connector .rail::after {
+    content: ""; position: absolute; top: 50%; right: -1px; transform: translateY(-50%);
+    border-left: 6px solid var(--wood); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  }
+  .connector .lbl {
+    font-size: 0.64rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.1em; margin-bottom: 7px; white-space: nowrap;
+  }
+  .connector .lbl.back { margin-bottom: 0; margin-top: 7px; }
+  .pulse {
+    position: absolute; top: 50%; left: 0; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--gold-strong); box-shadow: 0 0 10px var(--gold-strong);
+    transform: translate(-50%, -50%); animation: travel 3.4s ease-in-out infinite;
+  }
+  @keyframes travel { 0%,8% { left: 0; opacity: 0; } 15% { opacity: 1; } 50%,58% { left: 100%; opacity: 1; } 65% { opacity: 0; } 100% { left: 100%; opacity: 0; } }
+  .diagram-cap { margin: 16px 2px 0; font-size: 0.82rem; color: var(--muted); text-align: center; }
+
+  .stone { width: 20px; height: 20px; border-radius: 50%; display: inline-block; }
+  .stone.black { background: radial-gradient(circle at 34% 30%, #4a4a52, var(--stone-black)); }
+  .stone.white { background: radial-gradient(circle at 34% 30%, #ffffff, var(--stone-white)); border: 1px solid var(--line); }
+
+  section { padding: 34px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+  h2 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(1.4rem, 3vw, 1.9rem); letter-spacing: -0.01em;
+    margin: 0 0 6px; text-wrap: balance;
+  }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 0.96rem; }
+  p { margin: 0 0 14px; }
+  p.tight { margin: 0; }
+
+  .dl { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 6px; }
+  .dl .chunk {
+    flex: 1; min-width: 150px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 15px 16px;
+  }
+  .dl .chunk .big { font-family: var(--font-display); font-size: 1.5rem; color: var(--gold); font-weight: 700; }
+  .dl .chunk .big small { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+  .dl .chunk .lab { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+
+  .ways { display: flex; flex-direction: column; gap: 12px; }
+  .way {
+    display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 17px 19px;
+  }
+  .way .mark { padding-top: 2px; }
+  .way h3 { margin: 0 0 3px; font-size: 1.02rem; }
+  .way p { margin: 0; font-size: 0.9rem; color: var(--muted); }
+  .way .tag {
+    display: inline-block; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 700; padding: 2px 8px; border-radius: 6px; margin-left: 8px; vertical-align: 1px;
+  }
+  .tag.none { color: var(--bamboo); background: color-mix(in srgb, var(--bamboo) 15%, transparent); }
+  .tag.install { color: var(--gold); background: var(--gold-soft); }
+  .tag.soon { color: var(--muted); background: color-mix(in srgb, var(--muted) 16%, transparent); }
+
+  .reassure { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 13px; }
+  .reassure li { display: grid; grid-template-columns: auto 1fr; gap: 13px; align-items: start; }
+  .reassure .ic {
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    background: color-mix(in srgb, var(--bamboo) 16%, transparent);
+    color: var(--bamboo); display: grid; place-items: center; font-weight: 700; font-size: 0.9rem;
+  }
+  .reassure b { color: var(--ink); font-weight: 650; }
+  .reassure span { color: var(--muted); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+  th { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  td .pill { font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+  .pill.ok { color: var(--bamboo); background: color-mix(in srgb, var(--bamboo) 15%, transparent); }
+  .pill.via { color: var(--gold); background: var(--gold-soft); }
+  td code { font-family: var(--font-mono); font-size: 0.82rem; color: var(--gold-strong); }
+
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .steps li { display: grid; grid-template-columns: auto 1fr; gap: 18px; padding: 15px 0; border-bottom: 1px dashed var(--line); }
+  .steps li:last-child { border-bottom: none; }
+  .steps li::before {
+    counter-increment: s; content: counter(s);
+    font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--gold);
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--gold);
+    display: grid; place-items: center; background: var(--gold-soft);
+  }
+  .steps h3 { margin: 6px 0 3px; font-size: 1rem; }
+  .steps p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .cmd {
+    font-family: var(--font-mono); font-size: 0.82rem; background: var(--ground);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; margin-top: 9px;
+    color: var(--gold-strong); overflow-x: auto; white-space: nowrap;
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .legend .item {
+    display: flex; align-items: center; gap: 9px; font-size: 0.86rem;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot.green { background: #7fbf5a; box-shadow: 0 0 7px #7fbf5a; }
+  .dot.gold { background: var(--gold); box-shadow: 0 0 7px var(--gold); }
+  .dot.red { background: var(--warn); }
+
+  .cta-row { padding: 30px 0 10px; }
+  .cta {
+    display: inline-block; text-decoration: none; font-weight: 700; font-size: 0.9rem;
+    letter-spacing: 0.03em; text-transform: uppercase; padding: 13px 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--gold), var(--wood)); color: #fff;
+    box-shadow: var(--shadow);
+  }
+  .cta:hover { filter: brightness(1.08); }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 30px 0 60px; color: var(--muted); font-size: 0.85rem;
+  }
+  footer .stones { display: flex; gap: 6px; margin-bottom: 12px; }
+
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; left: 50%; opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="index.html">← Retour au jeu</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Comment ça marche</p>
+    <h1>Jouer contre <em>KataGo</em>,<br>expliqué simplement</h1>
+    <p class="lede">Le site vit chez GitHub. <strong>KataGo, lui, vit sur ta machine.</strong> Un petit programme — le pont — les fait parler. Le site, tu ne le télécharges jamais : il s'ouvre dans le navigateur, comme n'importe quelle page.</p>
+  </header>
+
+  <div class="diagram-shell" role="img" aria-label="Le navigateur envoie un coup au pont local, qui interroge KataGo sur le GPU, puis renvoie la réponse">
+    <div class="flow">
+      <div class="node">
+        <div class="glyph">🌐</div>
+        <h3>Le site</h3>
+        <p>La page de jeu, ouverte dans ton navigateur</p>
+        <span class="where cloud">Chez GitHub</span>
+      </div>
+      <div class="connector">
+        <span class="lbl">ton coup →</span>
+        <div class="rail"><span class="pulse"></span></div>
+        <span class="lbl back">← sa réponse</span>
+      </div>
+      <div class="node">
+        <div class="glyph">🔌</div>
+        <h3>Le pont</h3>
+        <p>Un mini-programme qui écoute sur ta machine</p>
+        <span class="where local">Sur ton PC</span>
+      </div>
+      <div class="connector">
+        <div class="rail"></div>
+      </div>
+      <div class="node">
+        <div class="glyph"><span class="stone black"></span></div>
+        <h3>KataGo</h3>
+        <p>Le moteur + son réseau, qui calcule le coup sur ta carte graphique</p>
+        <span class="where local">Sur ton PC</span>
+      </div>
+    </div>
+  </div>
+  <p class="diagram-cap">Une partie contre KataGo ne quitte jamais ta machine. Aucun serveur au milieu, aucune facture, aucune attente.</p>
+
+  <section>
+    <h2>Est-ce que ça télécharge quelque chose ?</h2>
+    <p class="sub">Oui — une seule fois, et c'est le moteur, pas le site.</p>
+    <p>Le site en lui-même est minuscule et s'ouvre instantanément. Ce qui se télécharge, c'est <strong>KataGo</strong> : le moteur de jeu et son cerveau (le réseau de neurones). Ça s'installe une fois pour toutes, dans un seul dossier, et ça se désinstalle en supprimant ce dossier.</p>
+    <div class="dl">
+      <div class="chunk"><div class="big">5 <small>Mo</small></div><div class="lab">Le moteur KataGo</div></div>
+      <div class="chunk"><div class="big">98 <small>Mo</small></div><div class="lab">Le réseau de neurones (son « cerveau »)</div></div>
+      <div class="chunk"><div class="big">0 <small>config</small></div><div class="lab">Node.js manquant ? Installé en local, sans toucher au système</div></div>
+    </div>
+    <p class="tight" style="margin-top:14px;color:var(--muted);font-size:0.9rem;">Tu colles une ligne de commande, le script fait le reste. Rien n'est écrit ailleurs que dans son dossier.</p>
+  </section>
+
+  <section>
+    <h2>Trois façons de jouer</h2>
+    <p class="sub">Chacune pour un besoin différent.</p>
+    <div class="ways">
+      <div class="way">
+        <div class="mark"><span class="stone black"></span></div>
+        <div>
+          <h3>Contre KataGo <span class="tag install">Installation unique</span></h3>
+          <p>Le vrai KataGo, l'un des plus forts moteurs de go au monde. Demande l'installation ci-dessus et que le moteur tourne pendant que tu joues.</p>
+        </div>
+      </div>
+      <div class="way">
+        <div class="mark"><span class="stone white"></span></div>
+        <div>
+          <h3>En multijoueur, contre un humain <span class="tag none">Rien à installer</span></h3>
+          <p>Crée une partie, partage le code à 4 chiffres. Tout passe par le site, aucune installation. Idéal si tu ne veux aucun programme local.</p>
+        </div>
+      </div>
+      <div class="way">
+        <div class="mark" style="font-size:20px;line-height:20px;">◐</div>
+        <div>
+          <h3>Une IA rapide dans le navigateur <span class="tag soon">Piste à venir</span></h3>
+          <p>Une IA légère qui tournerait dans l'onglet, sans rien installer — mais beaucoup plus faible que le vrai KataGo. Pour ceux qui refusent tout programme local.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>« Mon PC n'est pas taillé pour ça »</h2>
+    <p class="sub">Le moteur est fait pour être discret. Voici ce qu'il faut savoir.</p>
+    <ul class="reassure">
+      <li><div class="ic">⏻</div><div><b>Ce n'est pas un service permanent.</b> <span>Tu le lances quand tu veux jouer, tu fermes la fenêtre quand tu as fini. Rien ne reste en fond si tu ne le demandes pas.</span></div></li>
+      <li><div class="ic">⚡</div><div><b>Il ne travaille que pendant qu'il réfléchit.</b> <span>Environ une à deux secondes par coup, puis il attend, au repos. Entre deux coups, il ne consomme quasiment rien.</span></div></li>
+      <li><div class="ic">🎚</div><div><b>Tu règles sa force.</b> <span>Sur « Rapide », il pense moins longtemps et charge moins la machine. Sur « Maximum », il est plus fort mais plus lent.</span></div></li>
+      <li><div class="ic">🙅</div><div><b>Tu ne veux vraiment aucun programme local ?</b> <span>Joue en multijoueur contre des humains — ça ne demande rien du tout — ou attends l'IA rapide dans le navigateur.</span></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Quel navigateur, et pourquoi</h2>
+    <p class="sub">Depuis 2026, les navigateurs encadrent l'accès aux programmes locaux. Voici où on en est.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Navigateur</th><th>Comment on joue contre KataGo</th></tr></thead>
+        <tbody>
+          <tr><td>Chrome · Edge · Firefox</td><td>Directement sur le site. <span class="pill ok">1 autorisation à cliquer</span></td></tr>
+          <tr><td>Safari</td><td>On ouvre <code>127.0.0.1:8081</code> — le pont sert aussi le jeu <span class="pill via">contournement</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:16px;color:var(--muted);font-size:0.9rem;">La première fois, Chrome/Edge/Firefox demandent d'autoriser le site à parler à ton programme local : tu cliques « Autoriser », une seule fois. Safari refuse ce dialogue par principe — d'où la porte de sortie par <code style="font-family:var(--font-mono);color:var(--gold-strong)">localhost</code>, où le jeu et le moteur sont au même endroit.</p>
+  </section>
+
+  <section>
+    <h2>Concrètement, de zéro à la première partie</h2>
+    <p class="sub">Quatre étapes, une seule fois.</p>
+    <ol class="steps">
+      <li><div>
+        <h3>Tu colles la commande d'installation</h3>
+        <p>Le site détecte ton système et te donne la bonne ligne. Sur Windows, dans PowerShell :</p>
+        <div class="cmd">irm https://shazamifius.github.io/gogames/install/install.ps1 | iex</div>
+      </div></li>
+      <li><div>
+        <h3>Le script installe tout et démarre le pont</h3>
+        <p>Il télécharge KataGo + le réseau, écrit la configuration, et lance le pont. Le tout premier démarrage calibre ta carte graphique — quelques minutes, une seule fois.</p>
+      </div></li>
+      <li><div>
+        <h3>Le site passe au vert</h3>
+        <p>Dans l'encadré « Jouer contre KataGo », la pastille de statut te dit où en est le moteur, en temps réel.</p>
+        <div class="legend">
+          <span class="item"><span class="dot gold"></span> Recherche du moteur…</span>
+          <span class="item"><span class="dot green"></span> Moteur prêt</span>
+          <span class="item"><span class="dot red"></span> Non détecté</span>
+        </div>
+      </div></li>
+      <li><div>
+        <h3>Tu choisis et tu joues</h3>
+        <p>Taille du plateau, ta couleur, la force de KataGo — puis « Lancer la partie ». Les fois suivantes, tu relances juste le pont : plus rien à installer.</p>
+      </div></li>
+    </ol>
+  </section>
+
+  <div class="cta-row">
+    <a class="cta" href="index.html">Retour au jeu →</a>
+  </div>
+
+  <footer>
+    <div class="stones"><span class="stone black"></span><span class="stone white"></span></div>
+    <p style="margin:0;">Une partie contre KataGo reste entièrement sur ta machine — le site ne sert qu'à afficher le plateau. Pas de compte requis pour l'affronter, aucune statistique envoyée sans ton accord.</p>
+  </footer>
+</div>
+
+</body>
+</html>
