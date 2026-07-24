@@ -1783,7 +1783,7 @@ button:disabled:hover {
   background: rgba(8, 8, 12, 0.8);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
-  z-index: 2000;
+  z-index: 2600; /* au-dessus de l'ecran de fin (2000) */
   animation: fadeIn 0.2s ease;
 }
 .analysis-overlay.visible { display: grid; }
@@ -1895,3 +1895,109 @@ button:disabled:hover {
   .acc-grid { grid-template-columns: 1fr; }
   .acc-value { font-size: 1.8rem; }
 }
+
+/* ========== Barres de defilement sombres (global) ========== */
+* { scrollbar-width: thin; scrollbar-color: rgba(197, 160, 101, 0.35) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(197, 160, 101, 0.3);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(197, 160, 101, 0.55); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ========== Ecran de fin de partie (refonte) ========== */
+.end-game-message-container {
+  padding: 40px 48px;
+  max-width: 560px;
+  width: calc(100% - 40px);
+}
+.end-game-message { font-size: 2.2rem; color: var(--text-main); text-shadow: 0 0 24px rgba(0,0,0,0.4); }
+.end-game-countdown { font-size: 0.82rem; color: var(--text-muted); margin: 12px 0 0; letter-spacing: 0.3px; }
+
+.end-game-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+.end-game-actions button {
+  padding: 12px 22px;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  letter-spacing: 0.6px;
+  margin: 0;
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
+/* Action principale : Analyser */
+#analyzeGameBtn {
+  background: linear-gradient(135deg, var(--primary-wood), var(--primary-wood-dark)) !important;
+  border: none !important;
+  color: #fff !important;
+}
+#analyzeGameBtn:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: var(--shadow-neon) !important; }
+/* Secondaire : Revanche */
+#rematchBtn {
+  background: transparent !important;
+  border: 1px solid var(--primary-wood-dark) !important;
+  color: var(--primary-wood) !important;
+}
+#rematchBtn:hover { background: rgba(197, 160, 101, 0.12) !important; transform: translateY(-1px); box-shadow: none !important; }
+/* Tertiaire : Retour */
+#returnLobbyBtn {
+  background: transparent !important;
+  border: 1px solid var(--border-glass) !important;
+  color: var(--text-muted) !important;
+}
+#returnLobbyBtn:hover { color: var(--text-main) !important; border-color: var(--text-muted) !important; background: transparent !important; transform: none; box-shadow: none !important; }
+
+/* ========== Plateau de revue (analyse) ========== */
+.review-board-wrap { display: flex; justify-content: center; margin: 6px 0 12px; }
+#reviewBoard {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  cursor: default;
+}
+.review-nav { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.review-btn {
+  padding: 7px 13px; font-size: 0.9rem; box-shadow: none;
+  background: var(--bg-main); border: 1px solid var(--border-glass); color: var(--text-main);
+  letter-spacing: 0;
+}
+.review-btn:hover { background: var(--bg-secondary); border-color: var(--primary-wood-dark); transform: none; box-shadow: none; }
+.review-label {
+  min-width: 120px; text-align: center; font-size: 0.85rem;
+  color: var(--text-muted); font-variant-numeric: tabular-nums;
+}
+.review-eval { text-align: center; margin-bottom: 20px; }
+.review-eval-line {
+  display: flex; justify-content: space-between; max-width: 340px;
+  margin: 0 auto 8px; font-size: 0.85rem; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.review-eval-move {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex-wrap: wrap; font-size: 0.85rem; color: var(--text-main);
+}
+.review-best-hint { color: #7fbf5a; font-size: 0.8rem; }
+
+.analysis-section-title small { color: var(--text-muted); text-transform: none; letter-spacing: 0; font-size: 0.7rem; }
+
+/* Coup courant surligne dans les listes */
+.move-row { cursor: pointer; transition: background 0.15s; }
+.move-row:hover { background: var(--bg-secondary); }
+.move-row.current {
+  background: var(--gold-soft, rgba(197,160,101,0.13));
+  box-shadow: inset 3px 0 0 var(--primary-wood);
+}
+
+.eval-chart { cursor: pointer; }
+.eval-cursor { stroke: var(--primary-wood); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
