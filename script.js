@@ -475,6 +475,8 @@ async function startSignaling(isCreator) {
 function showScreen(screen) {
     [authScreen, nicknameScreen, lobbyScreen, gameScreen].forEach(s => s.classList.remove("active"));
     screen.classList.add("active");
+    // La modale « code de partie » ne doit jamais survivre a un changement d'ecran.
+    if (gameLinkSection) gameLinkSection.classList.remove("visible");
     if (screen === lobbyScreen) {
         fetchPublicGames();
     }
@@ -1712,7 +1714,7 @@ createGameBtn.onclick = async () => {
 
         showMessage(lobbyMessage, `Partie créée (${selectedSize}x${selectedSize}). Code : ${gameId}.`, 'lightgreen');
         gameLinkDisplay.textContent = gameId;
-        gameLinkSection.style.display = 'block';
+        gameLinkSection.classList.add('visible');
         if (isPublic) {
             publicGameNote.style.display = "block";
         } else {
@@ -2112,6 +2114,14 @@ copyLinkBtn.onclick = () => {
     const code = gameLinkDisplay.textContent;
     copyToClipboard(code);
 };
+
+// Fermeture de la modale « code de partie » (la partie reste en attente).
+const closeGameLinkBtn = document.getElementById('closeGameLinkBtn');
+if (closeGameLinkBtn) closeGameLinkBtn.onclick = () => gameLinkSection.classList.remove('visible');
+gameLinkSection.addEventListener('click', (e) => {
+    // Clic sur le fond (hors carte) : on ferme.
+    if (e.target === gameLinkSection) gameLinkSection.classList.remove('visible');
+});
 
 // ========== Nouveaux boutons de jeu ==========
 

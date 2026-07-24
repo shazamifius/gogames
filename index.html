@@ -98,7 +98,8 @@
 
                 <div class="join-game-box">
                     <h3>Rejoindre par code</h3>
-                    <input type="text" id="gameIdInput" placeholder="Code à 4 chiffres">
+                    <p class="box-hint">Entrez le code à 4 chiffres que votre adversaire vous a partagé.</p>
+                    <input type="text" id="gameIdInput" placeholder="Code à 4 chiffres" inputmode="numeric" maxlength="4">
                     <button id="joinGameBtn">Rejoindre</button>
                 </div>
 
@@ -158,14 +159,21 @@
                 </div>
             </div>
 
-            <div id="gameLinkSection" class="game-info" style="display:none;">
-                <p>Partie créée !</p>
-                <p>Partagez ce code : <strong id="gameLinkDisplay"></strong></p>
-                <button id="copyLinkBtn">Copier le code</button>
-                <p class="info-note" id="publicGameNote" style="display:none;">Votre partie est visible dans la liste d'attente.</p>
-            </div>
             <p id="lobbyMessage" class="message"></p>
         </main>
+      </div>
+    </div>
+
+    <!-- Modale : code de partie créée -->
+    <div id="gameLinkSection" class="game-link-modal">
+      <div class="game-link-card">
+        <button id="closeGameLinkBtn" class="game-link-close" title="Fermer">✕</button>
+        <p class="game-link-title">Partie créée !</p>
+        <p class="game-link-sub">Partagez ce code avec votre adversaire :</p>
+        <strong id="gameLinkDisplay"></strong>
+        <button id="copyLinkBtn">Copier le code</button>
+        <p class="info-note" id="publicGameNote" style="display:none;">Votre partie est aussi visible dans la liste d'attente.</p>
+        <p class="game-link-wait">En attente d'un adversaire…</p>
       </div>
     </div>
 

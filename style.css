@@ -373,11 +373,12 @@ select option {
 /* ========== Lobby (Grid Layout) ========== */
 .lobby-container {
   display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 40px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 28px;
   width: 100%;
-  height: calc(100vh - 120px);
-  max-height: 900px;
+  max-width: 1240px;
+  margin: 0 auto;
+  align-items: start;
 }
 
 /* Sidebar */
@@ -423,6 +424,7 @@ select option {
 
 .games-list {
   flex: 1;
+  max-height: 300px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -470,35 +472,53 @@ select option {
   grid-column: 2;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 40px;
-  position: relative;
+  align-items: stretch;
+  gap: 22px;
+  padding: 4px 0 20px;
+  min-width: 0;
 }
 
+.lobby-main > h2 {
+  margin: 0;
+  text-align: left;
+  font-size: 2rem;
+}
+
+/* Grille auto-responsive : 3 cartes en large, 2 puis 1 quand ca retrecit,
+   sans point de rupture a maintenir. C'est ce qui rend le mobile propre. */
 .lobby-options {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 50px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
   width: 100%;
-  max-width: 900px;
-  justify-content: center;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .create-game-box,
 .join-game-box,
 .katago-box {
-  flex: 1;
-  min-width: 240px;
-  padding: 30px;
+  padding: 26px;
   background: var(--bg-panel-glass);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 14px;
   border: 1px solid var(--border-glass);
+  min-width: 0;
+}
+
+/* Cartes multijoueur : le bouton principal se cale en bas, pour aligner
+   visuellement les actions d'une carte a l'autre malgre des contenus inegaux. */
+.create-game-box > button,
+.join-game-box > button {
+  margin-top: auto;
+}
+
+.create-game-box > h3,
+.join-game-box > h3,
+.katago-box > h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
 }
 
 /* Le mode solo se distingue des deux encadres multijoueur par l'accent bois. */
@@ -614,23 +634,65 @@ select option {
   /* Petit glow divin */
 }
 
-.game-info {
-  background: rgba(197, 160, 101, 0.05);
-  /* Tint Kaya très léger */
+/* Code de partie : modale centree, ne perturbe plus la mise en page du lobby. */
+.game-link-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 10, 14, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+.game-link-modal.visible { display: grid; }
+
+.game-link-card {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  padding: 34px 32px 28px;
+  background: var(--bg-panel-glass);
   border: 1px solid var(--primary-wood);
-  padding: 25px 40px;
-  border-radius: var(--radius-sm);
-  margin-top: 40px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   text-align: center;
 }
 
-#gameLinkDisplay {
-  font-family: monospace;
-  font-size: 1.8rem;
+.game-link-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  padding: 4px 9px;
+  font-size: 1rem;
+}
+.game-link-close:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
   color: var(--primary-wood);
-  display: block;
-  margin: 15px 0;
-  letter-spacing: 5px;
+}
+
+.game-link-title { margin: 0; font-size: 1.3rem; font-weight: 700; color: var(--primary-wood); }
+.game-link-sub { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+.game-link-wait { margin: 6px 0 0; font-size: 0.8rem; font-style: italic; color: var(--text-muted); }
+
+#gameLinkDisplay {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 2.4rem;
+  color: var(--primary-wood);
+  letter-spacing: 8px;
+  margin: 4px 0 6px;
+  text-shadow: 0 0 20px var(--primary-glow);
 }
 
 /* ========== Game Screen Layout ========== */
@@ -1250,11 +1312,12 @@ select option {
 
   /* --- Lobby --- */
   .lobby-options {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: 16px;
   }
 
-  .lobby-main { padding: 16px; }
+  .lobby-main { padding: 4px 0 16px; }
+  .lobby-main > h2 { text-align: center; }
 
   .create-game-box,
   .join-game-box {
@@ -1382,8 +1445,10 @@ select option {
   display: none;
 }
 
+/* En mode invite, seule la carte KataGo reste : on la centre, sans l'etirer. */
 .guest-mode .lobby-options {
-  max-width: 460px;
+  grid-template-columns: minmax(0, 420px);
+  justify-content: center;
 }
 
 .auth-separator {
@@ -1602,4 +1667,12 @@ button:disabled:hover {
   color: var(--primary-wood);
   text-transform: none;
   letter-spacing: 0;
+}
+
+/* Ligne d'aide dans les cartes du lobby */
+.box-hint {
+  margin: -2px 0 2px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
