@@ -338,7 +338,18 @@ async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter) {
             entry.aiVisits = aiVisits;
         }
         await db.ref(`users/${myUid}/history`).push(entry);
-    } catch(e) { console.error("Erreur historique:", e); }
+    } catch(e) {
+        console.error("Erreur historique:", e);
+        // Un refus des regles Firebase (champ non autorise, historique en
+        // ajout-seul) fait echouer l'ecriture sans que rien ne se voie : la
+        // partie n'apparait pas dans l'historique et le graphe reste vide.
+        // On le dit clairement plutot que d'echouer en silence.
+        if (typeof showMessage === 'function' && typeof gameMessage !== 'undefined') {
+            showMessage(gameMessage,
+                "Partie non enregistrée dans l'historique — republie tes règles Firebase.",
+                "orange");
+        }
+    }
 }
 
 // ========== Viewport (Zoom / Pan) ==========
