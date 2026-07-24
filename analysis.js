@@ -41,6 +41,10 @@ async function analyzeCurrentGame() {
     const bodyEl = document.getElementById('analysisBody');
     if (!overlay || !bodyEl) return;
 
+    // Ouvrir l'analyse doit stopper le retour automatique au menu, sinon le
+    // minuteur de fin de partie referme tout au bout de quelques secondes.
+    if (typeof cancelEndGameCountdown === 'function') cancelEndGameCountdown();
+
     const moves = buildAnalysisMoves();
     overlay.classList.add('visible');
 

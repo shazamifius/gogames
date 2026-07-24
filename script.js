@@ -107,6 +107,7 @@ let moveInProgress = false;
 // alors à jouer les deux camps — mode « hot-seat ». Sans ça, la reconnexion du
 // même compte retombe toujours sur Noir et Blanc devient injouable.
 let ownBothSides = false;
+let endGameCountdownInterval = null; // retour auto au menu apres une partie
 let lastMove = null; // {x, y}
 let prisoners = { black: 0, white: 0 };
 let pendingMove = null; // {x, y} — coup en attente de confirmation (mobile)
@@ -1104,21 +1105,32 @@ function animateWin(winnerNickname, message, winnerColor) {
         }());
     }
 
-    let countdown = 5;
+    // Retour au menu automatique, mais laisse le temps d'agir (analyse, revanche).
+    let countdown = 12;
     endGameCountdownEl.textContent = `Retour au menu dans ${countdown} secondes...`;
 
-    const countdownInterval = setInterval(() => {
+    endGameCountdownInterval = setInterval(() => {
         countdown--;
         if (countdown > 0) {
             endGameCountdownEl.textContent = `Retour au menu dans ${countdown} secondes...`;
         } else {
-            clearInterval(countdownInterval);
+            cancelEndGameCountdown();
             endGameOverlay.classList.remove("active");
             resetGame();
             showScreen(lobbyScreen);
             showMessage(lobbyMessage, "La partie est terminée.", "green");
         }
     }, 1000);
+}
+
+// Annule le retour automatique au menu : appele des que le joueur interagit
+// avec l'ecran de fin (ouvre l'analyse, etc.) pour ne pas fermer sous ses yeux.
+function cancelEndGameCountdown() {
+    if (endGameCountdownInterval) {
+        clearInterval(endGameCountdownInterval);
+        endGameCountdownInterval = null;
+    }
+    if (endGameCountdownEl) endGameCountdownEl.textContent = '';
 }
 
 async function endGame(message) {
@@ -2311,6 +2323,16 @@ document.getElementById('rematchBtn').onclick = () => {
     const sel = document.getElementById('boardSizeSelect');
     if (sel) sel.value = savedSize.toString();
     showMessage(lobbyMessage, "Créez une partie pour la revanche — même taille, couleurs inversées !", "gold");
+};
+
+// Retour manuel au menu depuis l'ecran de fin (utile quand le retour auto a ete
+// annule, par exemple apres avoir ouvert l'analyse).
+const returnLobbyBtn = document.getElementById('returnLobbyBtn');
+if (returnLobbyBtn) returnLobbyBtn.onclick = () => {
+    cancelEndGameCountdown();
+    endGameOverlay.classList.remove('active');
+    resetGame();
+    showScreen(lobbyScreen);
 };
 
 init();
