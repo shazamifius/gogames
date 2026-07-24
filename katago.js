@@ -9,7 +9,16 @@
    multijoueur existant n'est pas touche.
 ================================= */
 
-const KATAGO_BRIDGE_URL = "http://127.0.0.1:8081";
+// Si le jeu est deja servi depuis une origine loopback (le pont sert aussi le
+// site, cf. server/bridge.js), on parle au pont sur cette meme origine : meme
+// origine = pas de contenu mixte, pas de permission reseau local, et Safari
+// fonctionne. Sinon on vise le pont local par defaut.
+function isLoopbackOrigin() {
+    const h = location.hostname;
+    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "[::1]";
+}
+
+const KATAGO_BRIDGE_URL = isLoopbackOrigin() ? location.origin : "http://127.0.0.1:8081";
 const GTP_LETTERS = "ABCDEFGHJKLMNOPQRST"; // pas de I, convention go
 
 let vsAI = false;
@@ -472,9 +481,12 @@ async function checkBridge() {
     } catch (e) {
         // Un echec ici a trois causes possibles, et les confondre laisserait
         // l'utilisateur relancer un moteur qui tourne deja tres bien.
-        if (isSafari()) {
+        // Safari ne bloque QUE depuis une page HTTPS distante. Si l'on est deja
+        // sur localhost, l'echec vient d'un moteur absent, pas du navigateur.
+        if (isSafari() && !isLoopbackOrigin()) {
             setBridgeStatus("blocked",
-                "Safari interdit l'accès au moteur local. Utilisez Chrome, Edge ou Firefox.");
+                "Safari ne peut pas joindre le moteur depuis ce site. Installez le moteur, " +
+                "puis ouvrez http://127.0.0.1:8081 dans Safari pour jouer.");
             return false;
         }
         const perm = await localNetworkPermission();

@@ -137,12 +137,21 @@ if (-not (Test-Path $example)) { throw "analysis_example.cfg absent de l'archive
     Set-Content -Path $cfgPath -Encoding utf8
 Say "analysis.cfg ecrit."
 
-# ---------- Pont ----------
+# ---------- Pont + jeu (repli local) ----------
 
 Step "Telechargement du pont"
 $bridgePath = Join-Path $Root 'bridge.js'
 Remove-Item $bridgePath -ErrorAction SilentlyContinue  # toujours reprendre la derniere version
 Get-File "$SiteUrl/server/bridge.js" $bridgePath "bridge.js"
+
+# Le pont sert aussi le jeu : ainsi, meme sous Safari (qui refuse le loopback
+# depuis une page HTTPS distante), on peut jouer en ouvrant http://127.0.0.1:8081.
+Step "Telechargement du jeu (pour jouer aussi en local)"
+foreach ($f in @('index.html', 'script.js', 'katago.js', 'style.css')) {
+    $dest = Join-Path $Root $f
+    Remove-Item $dest -ErrorAction SilentlyContinue
+    Get-File "$SiteUrl/$f" $dest $f
+}
 
 # ---------- Lanceur ----------
 

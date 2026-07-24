@@ -207,12 +207,47 @@ function readBody(req) {
   });
 }
 
+/* ========== Repli local : le pont sert aussi le jeu ==========
+   Safari refuse tout appel loopback depuis une page HTTPS (bug WebKit 171934) :
+   ses utilisateurs ne peuvent donc pas jouer depuis le vrai site. En servant le
+   jeu lui-meme, le pont leur offre une porte de sortie : ils ouvrent
+   http://127.0.0.1:8081 et la page comme le moteur sont sur la meme origine —
+   ni contenu mixte, ni permission reseau local, ni CORS. */
+
+const SITE_DIR = [__dirname, path.resolve(__dirname, '..')]
+  .find((d) => fs.existsSync(path.join(d, 'index.html'))) || __dirname;
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml'
+};
+
+function serveStatic(req, res) {
+  let rel = decodeURIComponent(req.url.split('?')[0]);
+  if (rel === '/') rel = '/index.html';
+  // Garde anti-remontee : le chemin resolu doit rester sous SITE_DIR.
+  const filePath = path.normalize(path.join(SITE_DIR, rel));
+  if (!filePath.startsWith(SITE_DIR)) { res.writeHead(403); res.end(); return; }
+  const ext = path.extname(filePath).toLowerCase();
+  if (!MIME[ext]) { sendJson(res, 404, { error: 'type non servi' }); return; }
+  fs.readFile(filePath, (err, data) => {
+    if (err) { sendJson(res, 404, { error: 'introuvable' }); return; }
+    res.writeHead(200, { 'Content-Type': MIME[ext] });
+    res.end(data);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   applyCors(req, res);
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  if (req.url === '/health') {
+  if (req.url === '/health' || req.url.startsWith('/health?')) {
     sendJson(res, 200, { ok: engineReady, engine: 'katago v1.16.5', backend: 'opencl' });
     return;
   }
@@ -242,6 +277,9 @@ const server = http.createServer(async (req, res) => {
     }
     return;
   }
+
+  // Toute autre requete GET est servie comme fichier du jeu (repli local).
+  if (req.method === 'GET') { serveStatic(req, res); return; }
 
   sendJson(res, 404, { error: 'route inconnue' });
 });

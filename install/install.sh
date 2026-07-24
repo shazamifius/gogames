@@ -162,11 +162,19 @@ sed -e 's/^reportAnalysisWinratesAs = BLACK/reportAnalysisWinratesAs = SIDETOMOV
     "$EXAMPLE_CFG" > "$ENGINE_DIR/analysis.cfg"
 say "analysis.cfg ecrit."
 
-# ---------- Pont ----------
+# ---------- Pont + jeu (repli local) ----------
 
 step "Telechargement du pont"
 rm -f "$ROOT/bridge.js"   # toujours reprendre la derniere version
 fetch "$SITE_URL/server/bridge.js" "$ROOT/bridge.js" "bridge.js"
+
+# Le pont sert aussi le jeu : ainsi, meme sous Safari (qui refuse le loopback
+# depuis une page HTTPS distante), on peut jouer en ouvrant http://127.0.0.1:8081.
+step "Telechargement du jeu (pour jouer aussi en local)"
+for f in index.html script.js katago.js style.css; do
+  rm -f "$ROOT/$f"
+  fetch "$SITE_URL/$f" "$ROOT/$f" "$f"
+done
 
 # ---------- Lanceur ----------
 
