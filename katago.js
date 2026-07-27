@@ -392,15 +392,32 @@ async function startKataGoGame() {
         return;
     }
 
+    /* On LIT les reglages dans des variables locales, on ne les applique
+       qu'apres resetGame(). Celui-ci remet aiHumanProfile et aiHandicap a zero
+       pour ne pas laisser fuir la partie precedente : ecrire les reglages avant
+       de l'appeler revenait a les effacer aussitot. La partie se jouait alors
+       contre le moteur brut, sans handicap, quel que soit le menu. */
     const size = parseInt(document.getElementById("aiBoardSizeSelect").value);
     const humanColor = parseInt(document.getElementById("aiColorSelect").value);
-    aiColor = humanColor === 1 ? 2 : 1;
 
     // Le selecteur porte soit un profil humain ("rank_10k"), soit un nombre de
     // visites : un seul menu, deux natures d'adversaire.
     const levelValue = document.getElementById("aiStrengthSelect").value;
     const humanLevel = HUMAN_LEVELS.find((l) => l.profile === levelValue);
+
+    const handicapEl = document.getElementById("aiHandicapSelect");
+    let handicap = handicapEl ? (parseInt(handicapEl.value, 10) || 0) : 0;
+    // Le handicap se pose pour Noir ; il n'a de sens que si le joueur est Noir.
+    if (humanColor !== 1) handicap = 0;
+
+    stopBridgePolling();
+    resetGame();
+    updateBoardSize(size);
+
+    // ---- A partir d'ici seulement, les reglages de CETTE partie ----
+    aiColor = humanColor === 1 ? 2 : 1;
     aiHumanProfile = humanLevel ? humanLevel.profile : null;
+    aiHandicap = handicap;
     /* Un adversaire humain choisit son coup dans la policy de son rang, pas par
        la recherche : une visite suffirait. Mais si le pont est d'une version
        anterieure, il ignore humanProfile et retombe sur la recherche — et a une
@@ -409,15 +426,6 @@ async function startKataGoGame() {
        remplissait le plateau tout seul. On garde donc de quoi produire un coup
        valable meme quand le pont ignore le profil. */
     aiVisits = humanLevel ? HUMAN_FALLBACK_VISITS : (parseInt(levelValue, 10) || 500);
-
-    const handicapEl = document.getElementById("aiHandicapSelect");
-    aiHandicap = handicapEl ? (parseInt(handicapEl.value, 10) || 0) : 0;
-    // Le handicap se pose pour Noir ; il n'a de sens que si le joueur est Noir.
-    if (humanColor !== 1) aiHandicap = 0;
-
-    stopBridgePolling();
-    resetGame();
-    updateBoardSize(size);
 
     vsAI = true;
     gtpMoves = [];
@@ -480,6 +488,15 @@ async function startKataGoGame() {
 
     showScreen(gameScreen);
     setupGameListener();
+
+    // Trace de ce qui part REELLEMENT au moteur. Le menu peut afficher « 20 kyu »
+    // pendant que la partie se joue contre le moteur : cette ligne le montre.
+    console.log('[KataGo] partie lancée —',
+                'profil:', aiHumanProfile || 'aucun (moteur)',
+                '· visites:', aiVisits,
+                '· handicap:', aiHandicap,
+                '· plateau:', size + 'x' + size,
+                '· komi:', activeKomi);
 
     const who = humanLevel ? humanLevel.label : `KataGo (${aiVisits} visites)`;
     const hcap = aiHandicap >= 2 ? ` · handicap ${aiHandicap} pierres` : '';
