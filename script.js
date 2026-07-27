@@ -2050,8 +2050,22 @@ auth.onAuthStateChanged(async user => {
         if (!myNickname) showScreen(nicknameScreen);
         else {
             updatePlayerInfoDisplay();
-            showScreen(lobbyScreen);
-            cleanUpOldGames();
+            /* onAuthStateChanged ne se declenche PAS que login/logout : Firebase
+               le redeclenche aussi au rafraichissement du jeton (environ toutes
+               les heures), a la reprise de connexion, ou au changement d'onglet
+               — sans que rien n'ait ete demande. Rediriger vers le lobby ici
+               sans condition ejectait donc le joueur en PLEINE partie, sans
+               aucun message de fin : le plateau disparaissait et le lobby
+               revenait, comme si de rien n'etait. On ne touche plus a l'ecran
+               si une partie (IA ou multijoueur) est deja affichee — les
+               donnees (pseudo, stats) se rafraichissent quand meme au passage,
+               sans rien arracher au joueur. */
+            if (!gameScreen.classList.contains('active')) {
+                showScreen(lobbyScreen);
+                cleanUpOldGames();
+            } else {
+                console.log('[Auth] onAuthStateChanged redéclenché en pleine partie — écran conservé (rafraîchissement de jeton probable).');
+            }
         }
     } else {
         // Le mode invité (partie locale contre KataGo) n'utilise aucun compte :
