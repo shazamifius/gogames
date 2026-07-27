@@ -225,11 +225,19 @@ async function maybeAiMove() {
 function applyAiResult(result) {
     if (gameOver) return;
 
-    // Abandon : winrate renvoye du point de vue du joueur au trait, donc de l'IA.
+    /* Abandon : winrate renvoye du point de vue du joueur au trait, donc de l'IA.
+
+       En partie a handicap, l'IA demarre structurellement perdue — c'est le
+       principe meme du handicap. A 9 pierres elle s'estime a -108 points des le
+       premier coup, et abandonnerait donc au coup 30 sans qu'on ait rien joue :
+       une victoire creuse, qui n'apprend rien. Au go, le joueur fort joue au
+       contraire la partie jusqu'au bout et compte sur les erreurs de l'autre.
+       On repousse donc l'abandon a proportion des pierres rendues. */
+    const resignMinMoves = AI_RESIGN_MIN_MOVES + (aiHandicap >= 2 ? aiHandicap * 20 : 0);
     if (
         typeof result.winrate === "number" &&
         result.winrate < AI_RESIGN_WINRATE &&
-        gtpMoves.length >= AI_RESIGN_MIN_MOVES
+        gtpMoves.length >= resignMinMoves
     ) {
         const winner = aiColor === 1 ? "Blanc" : "Noir";
         saveGameToFirebase({

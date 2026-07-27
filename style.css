@@ -492,7 +492,12 @@ select option {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 20px;
   width: 100%;
-  align-items: stretch;
+  /* Chaque carte prend sa hauteur naturelle. Avec « stretch », les trois
+     s'alignaient sur la plus haute : la carte KataGo, qui deplie tout un
+     panneau d'installation quand le moteur est absent. Les deux cartes
+     multijoueur se retrouvaient alors etirees sur des centaines de pixels de
+     vide, bouton pousse tout en bas. */
+  align-items: start;
 }
 
 .create-game-box,
@@ -508,11 +513,12 @@ select option {
   min-width: 0;
 }
 
-/* Cartes multijoueur : le bouton principal se cale en bas, pour aligner
-   visuellement les actions d'une carte a l'autre malgre des contenus inegaux. */
+/* Les cartes ne s'etirent plus (voir .lobby-options) : un « margin-top: auto »
+   sur le bouton n'aurait plus rien a repousser, et creusait justement le vide
+   qu'on vient de supprimer. Une petite respiration avant l'action suffit. */
 .create-game-box > button,
 .join-game-box > button {
-  margin-top: auto;
+  margin-top: 6px;
 }
 
 .create-game-box > h3,
