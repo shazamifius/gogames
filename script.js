@@ -370,7 +370,11 @@ async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter, a
             dropped.push(field);
         }
         try {
-            await ref.push(entry);
+            const written = await ref.push(entry);
+            // Trace explicite : quand l'historique ne se remplit pas, c'est ici
+            // qu'on voit si l'ecriture est refusee, et par quelle regle.
+            console.log('[Historique] ✅ partie enregistrée — clé', written.key,
+                        dropped.length ? '(champs retirés : ' + dropped.join(', ') + ')' : '(entrée complète)');
             if (dropped.length && typeof showMessage === 'function' && typeof gameMessage !== 'undefined') {
                 // Enregistre, mais ampute : on dit quoi faire pour recuperer le reste.
                 showMessage(gameMessage,
@@ -382,11 +386,16 @@ async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter, a
             return true;
         } catch (e) {
             lastErr = e;
+            console.warn('[Historique] ❌ refus' +
+                (field ? ' (sans ' + field + ')' : ' (entrée complète)') + ' :',
+                e && e.message ? e.message : e);
         }
     }
 
     // Meme le noyau est refuse : la cause n'est plus un champ inconnu.
-    console.error("Erreur historique:", lastErr);
+    console.error('[Historique] ❌ ABANDON — même les champs de base sont refusés.',
+                  'Dernière erreur :', lastErr && lastErr.message ? lastErr.message : lastErr);
+    console.error('[Historique] Entrée tentée :', JSON.stringify(entry));
     if (typeof showMessage === 'function' && typeof gameMessage !== 'undefined') {
         showMessage(gameMessage,
             "Partie non enregistrée dans l'historique — republie tes règles Firebase.",
@@ -647,6 +656,20 @@ function renderStatsPanelContent(panel) {
             // Ordre chronologique (le plus ancien en premier) pour la courbe.
             const chrono = [];
             snap.forEach(child => chrono.push(child.val()));
+
+            /* Quand le compteur de parties et l'historique divergent, il faut
+               pouvoir dire lequel des deux ment : lecture tronquee, entrees
+               effacees, ou ecritures refusees. On imprime donc ce que Firebase
+               a REELLEMENT renvoye, cles comprises. */
+            console.log('[Historique] lu depuis Firebase :', snap.numChildren(),
+                        'entrée(s) — compteur de parties :', (myStats && myStats.gamesPlayed) || 0);
+            snap.forEach(c => {
+                const v = c.val() || {};
+                console.log('   ', c.key, '·', new Date(v.date).toLocaleString('fr-FR'),
+                            '·', v.result, 'vs', v.opponent,
+                            '· ratingAfter:', v.ratingAfter === undefined ? 'ABSENT' : v.ratingAfter);
+            });
+
             renderRatingChart(chartEl, chrono);
 
             if (!histSection) return;
@@ -1531,11 +1554,16 @@ function drawGrid() {
     }
 }
 function drawStones() {
+    // Deuxieme filet : un plateau absent ou de taille incoherente ne doit jamais
+    // faire tomber toute la page. Le quadrillage, lui, est deja dessine.
+    if (!Array.isArray(board) || board.length < BOARD_SIZE) return;
+
     const halfCell = CELL_SIZE / 2;
     const offsetX = BOARD_MARGIN + halfCell;
     const offsetY = BOARD_MARGIN + halfCell;
 
     for (let y = 0; y < BOARD_SIZE; y++) {
+        if (!board[y]) continue;
         for (let x = 0; x < BOARD_SIZE; x++) {
             if (board[y][x] === 1 || board[y][x] === 2) {
                 const cx = offsetX + x * CELL_SIZE;
@@ -1905,6 +1933,11 @@ function init() {
         gameIdInput.value = gameIdFromUrl;
     }
     setupClipboardDetection();
+    /* board vaut [] tant qu'aucune partie n'a commence : le dessiner levait
+       « Cannot read properties of undefined » des le chargement de la page, ce
+       qui interrompait init() — updateScore() et fetchPublicGames() ci-dessous
+       ne s'executaient donc jamais, et le lobby restait vide en permanence. */
+    updateBoardSize(BOARD_SIZE);
     renderBoard();
     updateScore();
     fetchPublicGames();
