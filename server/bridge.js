@@ -246,11 +246,18 @@ function sanitizeStones(value, boardSize) {
    se comprendre. On ignore les coups sous le seuil pour eviter les coups
    absurdes de la queue de distribution. */
 function sampleHumanPolicy(policy, boardSize, relativeFloor = 0.15) {
-  if (!Array.isArray(policy) || policy.length < boardSize * boardSize + 1) return null;
+  /* La policy compte N*N + 1 entrees : la DERNIERE est la probabilite de
+     passer. L'ignorer rendait le passe impossible, donc l'adversaire posait des
+     pierres tant qu'il restait un coup legal — y compris dans son propre
+     territoire, qu'il detruisait ainsi point par point. Le plateau finissait
+     sature et le joueur gagnait sans rien faire. Passer est un coup a part
+     entiere au go, et souvent le meilleur. */
+  const passIndex = boardSize * boardSize;
+  if (!Array.isArray(policy) || policy.length < passIndex + 1) return null;
 
   // Meilleur coup selon le rang imite : sert de reference d'echelle.
   let best = 0;
-  for (let i = 0; i < boardSize * boardSize; i++) {
+  for (let i = 0; i <= passIndex; i++) {
     const p = policy[i];
     if (typeof p === 'number' && p > best) best = p;
   }
@@ -266,7 +273,7 @@ function sampleHumanPolicy(policy, boardSize, relativeFloor = 0.15) {
 
   const candidates = [];
   let total = 0;
-  for (let i = 0; i < boardSize * boardSize; i++) {
+  for (let i = 0; i <= passIndex; i++) {
     const p = policy[i];
     if (typeof p !== 'number' || p < floor) continue; // < 0 : coup illegal
     candidates.push({ i, p });
@@ -280,6 +287,8 @@ function sampleHumanPolicy(policy, boardSize, relativeFloor = 0.15) {
     r -= c.p;
     if (r <= 0) { chosen = c; break; }
   }
+
+  if (chosen.i === passIndex) return { move: 'pass', prob: chosen.p / total };
 
   // Policy indexee en y * boardXSize + x, origine en haut a gauche.
   const x = chosen.i % boardSize;
