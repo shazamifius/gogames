@@ -344,9 +344,26 @@ function applyAiResult(result) {
        premier coup, et abandonnerait donc au coup 30 sans qu'on ait rien joue :
        une victoire creuse, qui n'apprend rien. Au go, le joueur fort joue au
        contraire la partie jusqu'au bout et compte sur les erreurs de l'autre.
-       On repousse donc l'abandon a proportion des pierres rendues. */
+       On repousse donc l'abandon a proportion des pierres rendues.
+
+       Mais un adversaire « joueur simule » (result.human) ne doit JAMAIS
+       abandonner. Deux raisons independantes :
+       1) Ce n'est pas authentique. Un vrai 20 kyu ne sait pas reconnaitre le
+          moment optimal pour abandonner — c'est exactement le defaut qu'on
+          demande au joueur humain de corriger dans sa propre analyse
+          ("ne sauve pas un groupe mort, joue ailleurs"). Lui preter cette
+          lucidite le rend plus fort que son etiquette ne l'annonce.
+       2) Le winrate utilise ici vient d'une recherche a HUMAN_FALLBACK_VISITS
+          (16) visites — largement insuffisant pour juger fiablement qu'une
+          partie est perdue, meme si le plateau semble tres favorable au
+          moment du coup precedent (un groupe en train de mourir peut inverser
+          toute l'evaluation). Verifie sur une partie reelle : le bot a
+          "abandonne" alors qu'il dominait tres largement au tableau des
+          captures — signe d'une lecture tactique locale, pas d'un vrai calcul
+          de victoire/defaite globale. */
     const resignMinMoves = AI_RESIGN_MIN_MOVES + (aiHandicap >= 2 ? aiHandicap * 20 : 0);
     if (
+        !result.human &&
         typeof result.winrate === "number" &&
         result.winrate < AI_RESIGN_WINRATE &&
         gtpMoves.length >= resignMinMoves
