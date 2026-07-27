@@ -1676,6 +1676,28 @@ button:disabled:hover {
   letter-spacing: 0;
 }
 
+/* Ancre de rang la plus proche sur l'echelle des bots : un chiffre Glicko ne
+   parle a personne, « environ 18 kyu » si. */
+.stats-rank-estimate {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.stats-rank-estimate strong { color: var(--primary-wood); font-weight: 600; }
+
+/* Bilan par adversaire : meme grille que .stats-row, juste plus dense car il
+   peut y avoir jusqu'a 8 lignes. */
+.opponent-row { padding: 3px 0; }
+.stats-muted { color: var(--text-muted); }
+
+/* Suggestion de handicap sous le selecteur : ni une alerte ni une erreur —
+   une information positive (on progresse), d'ou l'accent bois plutot que
+   l'orange deja utilise pour les avertissements ailleurs sur cette carte. */
+.progress-note {
+  color: var(--primary-wood);
+  font-style: italic;
+}
+
 /* Réinitialiser mes stats : action destructive, donc discrète par défaut et
    franchement rouge au survol pour qu'on comprenne qu'elle efface tout. */
 .reset-stats-btn {

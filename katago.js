@@ -54,20 +54,115 @@ const KATAGO_RATINGS = {
    visite il joue au niveau dan.
 
    Correspondance rang -> note : un 20 kyu est autour de 700 Elo, un 1 dan
-   autour de 2100, avec ~100 points par rang. Le classement Glicko-2 devient
-   alors interpretable : gagner contre le 15 kyu veut dire quelque chose. */
-const HUMAN_LEVELS = [
-    { profile: 'rank_20k', label: '20 kyu — grand debutant', rating:  700 },
-    { profile: 'rank_15k', label: '15 kyu — debutant',       rating: 1100 },
-    { profile: 'rank_10k', label: '10 kyu — intermediaire',  rating: 1500 },
-    { profile: 'rank_5k',  label: '5 kyu — confirme',        rating: 1900 },
-    { profile: 'rank_1k',  label: '1 kyu — fort',            rating: 2200 },
-    { profile: 'rank_5d',  label: '5 dan — expert',          rating: 2700 }
+   autour de 2300, ~80-100 points par rang. Le classement Glicko-2 devient
+   alors interpretable : gagner contre le 15 kyu veut dire quelque chose.
+   Ces six ancres (700/1100/1500/1900/2200/2700) sont celles deja utilisees
+   pour noter les parties jouees avant cette echelle etendue : on ne les
+   change pas, sous peine de rendre incoherentes les notes deja enregistrees.
+   Les rangs intermediaires sont interpoles entre ces memes ancres. */
+const RANK_LADDER = [
+    { profile: 'rank_20k', kyu: 20, label: '20 kyu — grand débutant', rating:  700 },
+    { profile: 'rank_18k', kyu: 18, label: '18 kyu',                  rating:  860 },
+    { profile: 'rank_15k', kyu: 15, label: '15 kyu — débutant',       rating: 1100 },
+    { profile: 'rank_12k', kyu: 12, label: '12 kyu',                  rating: 1340 },
+    { profile: 'rank_10k', kyu: 10, label: '10 kyu — intermédiaire',  rating: 1500 },
+    { profile: 'rank_8k',  kyu: 8,  label: '8 kyu',                   rating: 1660 },
+    { profile: 'rank_5k',  kyu: 5,  label: '5 kyu — confirmé',        rating: 1900 },
+    { profile: 'rank_3k',  kyu: 3,  label: '3 kyu',                   rating: 2050 },
+    { profile: 'rank_1k',  kyu: 1,  label: '1 kyu — fort',            rating: 2200 },
+    { profile: 'rank_1d',  dan: 1,  label: '1 dan',                   rating: 2300 },
+    { profile: 'rank_3d',  dan: 3,  label: '3 dan',                   rating: 2500 },
+    { profile: 'rank_5d',  dan: 5,  label: '5 dan — expert',          rating: 2700 },
+    { profile: 'rank_7d',  dan: 7,  label: '7 dan',                   rating: 2900 },
+    { profile: 'rank_9d',  dan: 9,  label: '9 dan — maximum',         rating: 3100 }
 ];
+
+/* Bots « d'epoque » : le reseau humanSL peut aussi imiter le style d'une
+   annee donnee plutot qu'un rang. Meme moteur, meme regles, mais une
+   signature d'ouverture differente — la ou KataGo seul n'en a qu'une, tres
+   reconnaissable. Distillees de parties fortes de chaque epoque : on les
+   situe donc toutes a un niveau eleve (comparable au moteur a 500 visites),
+   le handicap etant le bon levier pour les rendre abordables. */
+const ERA_BOTS = [
+    { profile: 'proyear_1800', label: 'École 1800',      blurb: 'Ouvertures classiques, coins en priorité (komoku).', rating: 2600 },
+    { profile: 'proyear_1900', label: 'École 1900',      blurb: 'Encore très attachée aux coins.',                    rating: 2600 },
+    { profile: 'proyear_1950', label: 'Transition 1950', blurb: 'Le point 4-4 commence à s\'imposer.',                rating: 2600 },
+    { profile: 'proyear_2000', label: 'École 2000',      blurb: 'Équilibre entre coins et influence.',                rating: 2600 },
+    { profile: 'proyear_2023', label: 'Style actuel',    blurb: 'Hoshi massif — l\'influence de l\'IA moderne.',      rating: 2600 }
+];
+
+// Union des deux : conserve le nom HUMAN_LEVELS pour ne pas toucher aux
+// lectures existantes (script.js notamment), qui cherchent un profil par nom
+// sans se soucier de sa famille (rang ou epoque).
+const HUMAN_LEVELS = [...RANK_LADDER, ...ERA_BOTS];
 const HUMAN_RD = 90; // moins sur qu'un moteur : le rang imite est approximatif
 // Assez de visites pour que le moteur propose toujours au moins un coup, meme
 // si le pont ignore le profil humain. Reste rapide (~0,3 s par coup).
 const HUMAN_FALLBACK_VISITS = 16;
+
+/* Rang estime a partir de la note Glicko : l'ancre la plus proche sur
+   l'echelle sert de repere lisible (« ~18 kyu ») a un chiffre Glicko qui ne
+   parle a personne. Approximatif par nature — un ancrage au plus proche, pas
+   une interpolation fine — mais suffisant pour se situer. */
+function estimateRankLabel(rating) {
+    if (typeof rating !== 'number' || !isFinite(rating)) return null;
+    let best = RANK_LADDER[0], bestDist = Infinity;
+    for (const r of RANK_LADDER) {
+        const d = Math.abs(r.rating - rating);
+        if (d < bestDist) { bestDist = d; best = r; }
+    }
+    return best.kyu ? `${best.kyu} kyu` : `${best.dan} dan`;
+}
+
+/* Suivi de progression par bot : combien de victoires/defaites d'affilee au
+   handicap actuel. Sert a suggerer « tu es pret a baisser le handicap »,
+   sans dependre d'un nouveau champ Firebase (qui demanderait de republier des
+   regles) — un simple compteur en local suffit a ce role, et reste correct
+   meme hors-ligne. Limite assumee : le suivi est local au navigateur, pas au
+   compte ; changer de machine remet le compteur a zero. */
+function progressKey(profile) { return 'gogames:progress:' + profile; }
+
+function readProgress(profile) {
+    try {
+        const raw = localStorage.getItem(progressKey(profile));
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+}
+
+function writeProgress(profile, rec) {
+    try { localStorage.setItem(progressKey(profile), JSON.stringify(rec)); } catch (e) { /* stockage indisponible : on continue sans */ }
+}
+
+/* Met a jour le compteur apres une partie et renvoie l'enregistrement a jour.
+   Un changement de handicap depuis la derniere partie remet le compteur a
+   zero : une serie de victoires a 4 pierres ne doit pas suggerer de baisser
+   encore si le joueur vient justement de le faire manuellement. */
+function updateProgressAfterGame(profile, handicap, result) {
+    let rec = readProgress(profile);
+    if (!rec || rec.handicap !== handicap) rec = { handicap, streak: 0 };
+    if (result === 'win') rec.streak = rec.streak > 0 ? rec.streak + 1 : 1;
+    else if (result === 'loss') rec.streak = rec.streak < 0 ? rec.streak - 1 : -1;
+    writeProgress(profile, rec);
+    return rec;
+}
+
+/* Suggestion a afficher pour CE profil, sans en decider a la place du joueur :
+   2 victoires d'affilee -> proposer une pierre de moins ; 3 defaites d'affilee
+   -> proposer une pierre de plus. Rien d'automatique : la fonction ne fait que
+   lire le compteur, jamais l'appliquer elle-meme. */
+function progressSuggestion(profile) {
+    const rec = readProgress(profile);
+    if (!rec) return null;
+    if (rec.streak >= 2) {
+        return { handicap: Math.max(0, rec.handicap - 1), text:
+            `${rec.streak} victoires d'affilée à ${rec.handicap} pierre${rec.handicap > 1 ? 's' : ''} — prêt à en enlever une ?` };
+    }
+    if (rec.streak <= -3) {
+        return { handicap: Math.min(9, rec.handicap + 1), text:
+            `${Math.abs(rec.streak)} défaites d'affilée à ${rec.handicap} pierre${rec.handicap > 1 ? 's' : ''} — une de plus t'aidera.` };
+    }
+    return null;
+}
 
 let aiHumanProfile = null;    // null => moteur classique (recherche)
 let bridgeVersionWarned = false;
@@ -610,17 +705,33 @@ function showInstallFor(os) {
     });
 }
 
+/* Construit les <option> d'un groupe une seule fois (idempotent : rappeler la
+   fonction sur un groupe deja rempli ne duplique rien). Evite de maintenir en
+   double la liste des rangs/epoques dans le HTML et dans le JS — une seule
+   source de verite : RANK_LADDER / ERA_BOTS ci-dessus. */
+function populateOptGroup(groupEl, items, describe) {
+    if (!groupEl || groupEl.dataset.populated) return;
+    groupEl.dataset.populated = "1";
+    groupEl.innerHTML = items.map(describe).join('');
+}
+
 /* Les niveaux « joueur simule » n'existent que si le reseau humain est installe.
    On ne les affiche jamais sans lui : un menu qui annonce « 20 kyu » et envoie
    un joueur dan est pire que pas de menu du tout. */
 function applyHumanAvailability(hasHuman) {
-    const group = document.getElementById("humanLevelGroup");
+    const rankGroup = document.getElementById("humanLevelGroup");
+    const eraGroup = document.getElementById("eraLevelGroup");
     const hint = document.getElementById("strengthHint");
     const select = document.getElementById("aiStrengthSelect");
-    if (group) group.style.display = hasHuman ? "" : "none";
+
+    populateOptGroup(rankGroup, RANK_LADDER, r => `<option value="${r.profile}">${r.label}</option>`);
+    populateOptGroup(eraGroup, ERA_BOTS, e => `<option value="${e.profile}">${e.label} — ${e.blurb}</option>`);
+
+    if (rankGroup) rankGroup.style.display = hasHuman ? "" : "none";
+    if (eraGroup) eraGroup.style.display = hasHuman ? "" : "none";
     if (hint) {
         hint.innerHTML = hasHuman
-            ? "Choisis un rang proche du tien : c'est en gagnant parfois qu'on progresse."
+            ? "Choisis un rang proche du tien pour progresser, ou un style d'époque pour changer d'air."
             : "Le moteur joue au niveau dan même à 100 visites. " +
               "<a href=\"#\" id=\"humanModelHelp\">Jouer contre un débutant ?</a>";
         wireHumanModelHelp();
@@ -629,6 +740,30 @@ function applyHumanAvailability(hasHuman) {
     // plutot que de le laisser sur le moteur par defaut.
     if (hasHuman && select && !select.dataset.userPicked) {
         select.value = "rank_15k";
+    }
+    applyProgressSuggestion();
+}
+
+/* Pre-remplit le handicap selon la serie en cours contre le bot choisi, et
+   l'explique en clair. Le joueur garde la main : c'est une pre-selection, pas
+   une contrainte — changer le menu l'ecrase sans rien demander. */
+function applyProgressSuggestion() {
+    const select = document.getElementById("aiStrengthSelect");
+    const hcapSel = document.getElementById("aiHandicapSelect");
+    const noteEl = document.getElementById("progressNote");
+    if (!select || !hcapSel || !noteEl) return;
+
+    const profile = select.value;
+    const isRankBot = RANK_LADDER.some(r => r.profile === profile);
+    const suggestion = isRankBot ? progressSuggestion(profile) : null;
+
+    if (suggestion) {
+        hcapSel.value = String(suggestion.handicap);
+        noteEl.textContent = suggestion.text;
+        noteEl.style.display = "";
+    } else {
+        noteEl.textContent = "";
+        noteEl.style.display = "none";
     }
 }
 
@@ -785,6 +920,7 @@ function bindKataGoButton() {
     const strength = document.getElementById("aiStrengthSelect");
     if (strength) strength.addEventListener("change", () => {
         strength.dataset.userPicked = "1";
+        applyProgressSuggestion();   // nouveau bot choisi -> sa propre serie, pas celle du precedent
     });
 
     // Le handicap ne se pose que pour Noir : le proposer a Blanc n'a pas de sens.

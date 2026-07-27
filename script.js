@@ -611,11 +611,18 @@ function renderStatsPanelContent(panel) {
     const rd = Math.round(myStats.ratingDeviation || 350);
     // RD élevé = note encore incertaine : on le dit clairement.
     const provisoire = rd > 150 ? ' <span class="rating-prov">(provisoire)</span>' : '';
+    // Le chiffre Glicko ne parle a personne ; l'ancre de rang la plus proche
+    // sur l'echelle des bots, si.
+    const rankLabel = (typeof estimateRankLabel === 'function') ? estimateRankLabel(myStats.rating) : null;
+    const rankLine = rankLabel
+        ? `<div class="stats-rank-estimate">Niveau estimé : environ <strong>${rankLabel}</strong></div>`
+        : '';
     panel.innerHTML = `
         <div class="stats-panel-title">Profil joueur</div>
         <div class="stats-rating">
             <div class="stats-rating-value">◈ ${rating} <span class="stats-rating-rd">± ${rd}</span></div>
             <div class="stats-rating-label">Classement Glicko-2${provisoire}</div>
+            ${rankLine}
         </div>
         <div id="ratingChart" class="rating-chart"></div>
         <div class="stats-xp">
@@ -643,6 +650,7 @@ function renderStatsPanelContent(panel) {
             <span class="stats-label">Points totaux</span>
             <span class="stats-value gold">★ ${Math.floor(myStats.totalPoints)}</span>
         </div>
+        <div id="statsPanelOpponents" class="stats-history-section"></div>
         <div id="statsPanelHistory" class="stats-history-section">
             <div class="stats-panel-title" style="margin-top:12px;">Dernières parties</div>
             <p class="stats-label" style="font-size:0.72rem;">Chargement...</p>
@@ -683,6 +691,7 @@ function renderStatsPanelContent(panel) {
             });
 
             renderRatingChart(chartEl, chrono);
+            renderOpponentSummary(document.getElementById('statsPanelOpponents'), chrono);
 
             if (!histSection) return;
             const entries = chrono.slice(-5).reverse(); // 5 plus récentes, récent en premier
@@ -706,6 +715,50 @@ function renderStatsPanelContent(panel) {
                 ${rows}`;
         }).catch(() => {});
     }
+}
+
+/* Bilan par adversaire : regroupe l'historique deja charge par le nom
+   d'adversaire ("KataGo — 20 kyu", "KataGo — École 1800", un pseudo humain...).
+   Aucune lecture Firebase supplementaire — chrono est deja en memoire pour la
+   courbe. Limite assumee : ne porte que sur les HISTORY_FETCH_LIMIT parties
+   les plus recentes, pas tout l'historique. */
+function renderOpponentSummary(el, chrono) {
+    if (!el) return;
+    const all = chrono || [];
+    if (all.length === 0) { el.innerHTML = ''; return; }
+
+    const byOpponent = new Map();
+    for (const e of all) {
+        if (!e || !e.opponent) continue;
+        let rec = byOpponent.get(e.opponent);
+        if (!rec) { rec = { name: e.opponent, wins: 0, losses: 0, draws: 0, lastDate: 0 }; byOpponent.set(e.opponent, rec); }
+        if (e.result === 'win') rec.wins++;
+        else if (e.result === 'loss') rec.losses++;
+        else rec.draws++;
+        if (typeof e.date === 'number' && e.date > rec.lastDate) rec.lastDate = e.date;
+    }
+    if (byOpponent.size === 0) { el.innerHTML = ''; return; }
+
+    // Le plus recemment affronte en premier : c'est ce qui interesse le plus.
+    const rows = [...byOpponent.values()]
+        .sort((a, b) => b.lastDate - a.lastDate)
+        .slice(0, 8)
+        .map(r => {
+            const total = r.wins + r.losses + r.draws;
+            const pct = total ? Math.round((r.wins / total) * 100) : 0;
+            return `<div class="stats-row opponent-row">
+                <span class="stats-value" style="font-size:0.8rem;">${escapeHtml(r.name)}</span>
+                <span class="stats-label" style="font-size:0.72rem;">
+                    <span class="green">${r.wins}V</span> · <span class="red">${r.losses}D</span>${r.draws ? ` · ${r.draws}N` : ''}
+                    <span class="stats-muted">(${pct}%)</span>
+                </span>
+            </div>`;
+        }).join('');
+
+    el.innerHTML = `
+        <div class="stats-panel-title" style="margin-top:12px;">Bilan par adversaire</div>
+        ${rows}
+        ${byOpponent.size > 8 ? `<p class="stats-label" style="font-size:0.68rem;font-style:italic;">+ ${byOpponent.size - 8} autre(s)</p>` : ''}`;
 }
 
 /* Courbe de progression du classement : une seule serie (ma note au fil des
@@ -1418,6 +1471,16 @@ async function endGame(message) {
                     opp = { rating: Math.max(100, opp.rating - aiHandicap * 100), rd: opp.rd };
                 }
                 ratingAfter = updateMyRating(result, opp.rating, opp.rd);
+
+                // Suivi de la serie pour la suggestion de handicap — uniquement
+                // contre l'echelle de rangs (les bots d'epoque sont pour le
+                // style, pas pour la progression graduee).
+                if (typeof aiHumanProfile !== 'undefined' && aiHumanProfile &&
+                    typeof RANK_LADDER !== 'undefined' &&
+                    typeof updateProgressAfterGame === 'function' &&
+                    RANK_LADDER.some(r => r.profile === aiHumanProfile)) {
+                    updateProgressAfterGame(aiHumanProfile, aiHandicap || 0, result);
+                }
             } else {
                 const oppColor = myColor === 1 ? 'white' : 'black';
                 const oppData = (gameData.players && gameData.players[oppColor]) || {};

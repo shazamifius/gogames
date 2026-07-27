@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260727h">
+  <link rel="stylesheet" href="style.css?v=20260727i">
   <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
@@ -123,17 +123,14 @@
                     <div class="form-group">
                         <label for="aiStrengthSelect">Niveau de l'adversaire :</label>
                         <select id="aiStrengthSelect">
-                            <!-- Les niveaux « rang » ne s'affichent que si le réseau
-                                 humain est installé : les proposer sans lui ferait
-                                 jouer un dan sous une étiquette de débutant. -->
-                            <optgroup label="Joueur simulé" id="humanLevelGroup" style="display:none;">
-                                <option value="rank_20k">20 kyu — grand débutant</option>
-                                <option value="rank_15k">15 kyu — débutant</option>
-                                <option value="rank_10k">10 kyu — intermédiaire</option>
-                                <option value="rank_5k">5 kyu — confirmé</option>
-                                <option value="rank_1k">1 kyu — fort</option>
-                                <option value="rank_5d">5 dan — expert</option>
-                            </optgroup>
+                            <!-- Les groupes « rang » et « époque » ne s'affichent que si
+                                 le réseau humain est installé, et sont peuplés par JS
+                                 depuis RANK_LADDER / ERA_BOTS (katago.js) : une seule
+                                 source de vérité pour les libellés. Sans le réseau,
+                                 les proposer ferait jouer un dan sous une étiquette de
+                                 débutant. -->
+                            <optgroup label="Échelle de rangs" id="humanLevelGroup" style="display:none;"></optgroup>
+                            <optgroup label="Styles d'époque" id="eraLevelGroup" style="display:none;"></optgroup>
                             <optgroup label="Moteur (très fort)">
                                 <option value="100">Moteur — 100 visites (≈ 5 dan)</option>
                                 <option value="500" selected>Moteur — 500 visites (≈ 7 dan)</option>
@@ -163,6 +160,9 @@
                             Chaque pierre vaut environ un rang d'écart. C'est la façon
                             normale de jouer contre plus fort que soi.
                         </p>
+                        <!-- Rempli par applyProgressSuggestion() (katago.js) selon la
+                             série de victoires/défaites au bot et handicap choisis. -->
+                        <p class="field-hint progress-note" id="progressNote" style="display:none;"></p>
                     </div>
                     <div id="bridgeStatus" class="bridge-status checking">
                         <span class="bridge-dot"></span>
@@ -322,9 +322,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-  <script src="glicko2.js?v=20260727h"></script>
-  <script src="script.js?v=20260727h"></script>
-  <script src="katago.js?v=20260727h"></script>
-  <script src="analysis.js?v=20260727h"></script>
+  <script src="glicko2.js?v=20260727i"></script>
+  <script src="script.js?v=20260727i"></script>
+  <script src="katago.js?v=20260727i"></script>
+  <script src="analysis.js?v=20260727i"></script>
 </body>
 </html>
