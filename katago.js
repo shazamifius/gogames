@@ -329,6 +329,7 @@ function aiPass() {
 
     if (nextPasses >= 2) {
         const { black, white } = computeScore(board);
+        if (typeof logFinalScore === 'function') logFinalScore(board, black, white, 'double passe (IA)');
         let winnerMsg;
         if (black > white) winnerMsg = `Noir gagne avec ${(black - white).toFixed(1)} pts d'avance !`;
         else if (white > black) winnerMsg = `Blanc gagne avec ${(white - black).toFixed(1)} pts d'avance !`;

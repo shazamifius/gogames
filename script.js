@@ -1005,6 +1005,29 @@ function boardToString(state) {
 }
 
 /* ========== Logique du jeu & règles ========== */
+/* Preuve d'audit pour un score de fin de partie : un ecart qui parait « trop
+   rond » (ex. 80.5 tapis sur 9x9 komi 0.5, le plafond mathematique du plateau)
+   fait douter d'un bug de calcul plutot que d'une victoire ecrasante. On imprime
+   donc, a chaque double passe, le compte REEL de pierres et territoire par
+   camp — la preuve se lit d'un coup d'oeil au lieu de se deviner apres coup. */
+function logFinalScore(state, black, white, label) {
+    let bStones = 0, wStones = 0, empty = 0;
+    for (let y = 0; y < BOARD_SIZE; y++) {
+        for (let x = 0; x < BOARD_SIZE; x++) {
+            if (state[y][x] === 1) bStones++;
+            else if (state[y][x] === 2) wStones++;
+            else empty++;
+        }
+    }
+    console.log(`[Score] ${label} — plateau ${BOARD_SIZE}x${BOARD_SIZE}, komi ${activeKomi}`);
+    console.log(`   pierres sur le plateau : Noir ${bStones} · Blanc ${wStones} · vides ${empty}`);
+    console.log(`   captures cumulées      : Noir a pris ${prisoners.black} · Blanc a pris ${prisoners.white}`);
+    console.log(`   score (pierres+territoire+komi) : Noir ${black.toFixed(1)} · Blanc ${white.toFixed(1)}`);
+    if (wStones === 0 && bStones > 0) {
+        console.log('   -> Blanc n\'a plus AUCUNE pierre sur le plateau : Noir possède mathématiquement tout, d\'où le score au plafond.');
+    }
+}
+
 function computeScore(state) {
     let black = 0, white = 0;
     const visited = new Set();
@@ -1191,6 +1214,7 @@ function passTurn() {
 
     if (nextPasses >= 2) {
         const { black, white } = computeScore(board);
+        logFinalScore(board, black, white, 'double passe (joueur)');
         let winnerMsg;
         if (black > white) {
             winnerMsg = `Noir gagne avec ${(black - white).toFixed(1)} pts d'avance !`;
@@ -1875,6 +1899,7 @@ function setupGameListener() {
             // Filet de sécurité : double passe pas encore traitée côté serveur
             if (consecutivePasses >= 2 && !gameOver && myColor !== 0) {
                 const { black, white } = computeScore(board);
+                logFinalScore(board, black, white, 'double passe (filet de sécurité)');
                 let winnerMsg;
                 if (black > white) winnerMsg = `Noir gagne avec ${(black - white).toFixed(1)} pts d'avance !`;
                 else if (white > black) winnerMsg = `Blanc gagne avec ${(white - black).toFixed(1)} pts d'avance !`;
