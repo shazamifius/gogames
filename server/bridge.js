@@ -245,8 +245,24 @@ function sanitizeStones(value, boardSize) {
    le meme coup, et un adversaire deterministe s'apprend par coeur au lieu de
    se comprendre. On ignore les coups sous le seuil pour eviter les coups
    absurdes de la queue de distribution. */
-function sampleHumanPolicy(policy, boardSize, floor = 0.005) {
+function sampleHumanPolicy(policy, boardSize, relativeFloor = 0.15) {
   if (!Array.isArray(policy) || policy.length < boardSize * boardSize + 1) return null;
+
+  // Meilleur coup selon le rang imite : sert de reference d'echelle.
+  let best = 0;
+  for (let i = 0; i < boardSize * boardSize; i++) {
+    const p = policy[i];
+    if (typeof p === 'number' && p > best) best = p;
+  }
+  if (best <= 0) return null;
+
+  /* Seuil RELATIF au meilleur coup, et non absolu. La distribution d'un rang
+     donne a une longue queue de coups tres improbables : environ un tiers de la
+     masse. Un seuil absolu bas les laissait passer, et l'adversaire jouait donc
+     un coup aberrant une fois sur trois — bien en dessous du rang annonce. Un
+     joueur de 20 kyu hesite entre quelques coups plausibles ; il ne joue pas un
+     coup qu'il ne jouerait qu'une fois sur deux cents. */
+  const floor = Math.max(0.005, best * relativeFloor);
 
   const candidates = [];
   let total = 0;
