@@ -47,6 +47,51 @@ const KATAGO_RATINGS = {
     10000: { rating: 3200, rd: 60 }
 };
 
+/* Niveaux « humains ». Le reseau humanSL imite un joueur du rang demande au
+   lieu de chercher le meilleur coup — c'est la seule facon d'avoir un
+   adversaire abordable. Reduire les visites n'y suffit pas : la force de
+   KataGo vient de son reseau, pas de la profondeur de recherche, et meme a une
+   visite il joue au niveau dan.
+
+   Correspondance rang -> note : un 20 kyu est autour de 700 Elo, un 1 dan
+   autour de 2100, avec ~100 points par rang. Le classement Glicko-2 devient
+   alors interpretable : gagner contre le 15 kyu veut dire quelque chose. */
+const HUMAN_LEVELS = [
+    { profile: 'rank_20k', label: '20 kyu — grand debutant', rating:  700 },
+    { profile: 'rank_15k', label: '15 kyu — debutant',       rating: 1100 },
+    { profile: 'rank_10k', label: '10 kyu — intermediaire',  rating: 1500 },
+    { profile: 'rank_5k',  label: '5 kyu — confirme',        rating: 1900 },
+    { profile: 'rank_1k',  label: '1 kyu — fort',            rating: 2200 },
+    { profile: 'rank_5d',  label: '5 dan — expert',          rating: 2700 }
+];
+const HUMAN_RD = 90; // moins sur qu'un moteur : le rang imite est approximatif
+
+let aiHumanProfile = null;    // null => moteur classique (recherche)
+let aiHandicap = 0;
+let aiInitialStones = [];     // pierres de handicap, format GTP pour le moteur
+
+/* Points de handicap : les hoshi, dans l'ordre conventionnel. Deux pierres se
+   posent en diagonale, puis on complete les coins, puis les cotes, et le
+   centre en dernier pour les nombres impairs. */
+function handicapPoints(size, n) {
+    if (n < 2) return [];
+    const lo = size === 9 ? 2 : 3;             // 3-3 en 9x9, 4-4 au dela
+    const hi = size - 1 - lo;
+    const mid = (size - 1) / 2;
+    if (!Number.isInteger(mid)) return [];     // plateau pair : pas de hoshi central
+
+    const corners = [[lo, hi], [hi, lo], [hi, hi], [lo, lo]];      // {x, y}, y vers le bas
+    const sides = [[lo, mid], [hi, mid], [mid, hi], [mid, lo]];
+    const center = [mid, mid];
+
+    const count = Math.max(2, Math.min(n, 9));
+    const pts = corners.slice(0, Math.min(count, 4));
+    if (count >= 6) pts.push(...sides.slice(0, count >= 8 ? 4 : 2));
+    if (count % 2 === 1 && count >= 5) pts.push(center);
+
+    return pts.slice(0, count).map(([x, y]) => ({ x, y }));
+}
+
 // La mise a jour du classement est centralisee dans updateMyRating (script.js),
 // utilisee aussi bien contre KataGo qu'en multijoueur. KATAGO_RATINGS ci-dessus
 // fournit la note de reference de l'adversaire quand c'est le moteur.
@@ -147,8 +192,13 @@ async function maybeAiMove() {
             body: JSON.stringify({
                 moves: gtpMoves,
                 boardSize: BOARD_SIZE,
-                komi: KOMI,
-                maxVisits: aiVisits
+                komi: activeKomi,
+                maxVisits: aiVisits,
+                // Les pierres de handicap ne sont pas des coups joues : le
+                // moteur les recoit a part, sinon l'alternance des couleurs
+                // serait decalee de tout le handicap.
+                initialStones: aiInitialStones,
+                humanProfile: aiHumanProfile
             })
         });
 
@@ -319,8 +369,21 @@ async function startKataGoGame() {
 
     const size = parseInt(document.getElementById("aiBoardSizeSelect").value);
     const humanColor = parseInt(document.getElementById("aiColorSelect").value);
-    aiVisits = parseInt(document.getElementById("aiStrengthSelect").value);
     aiColor = humanColor === 1 ? 2 : 1;
+
+    // Le selecteur porte soit un profil humain ("rank_10k"), soit un nombre de
+    // visites : un seul menu, deux natures d'adversaire.
+    const levelValue = document.getElementById("aiStrengthSelect").value;
+    const humanLevel = HUMAN_LEVELS.find((l) => l.profile === levelValue);
+    aiHumanProfile = humanLevel ? humanLevel.profile : null;
+    // Un adversaire humain n'a pas besoin d'une recherche profonde : la policy
+    // suffit, et c'est bien plus rapide (un coup quasi instantane).
+    aiVisits = humanLevel ? 1 : (parseInt(levelValue, 10) || 500);
+
+    const handicapEl = document.getElementById("aiHandicapSelect");
+    aiHandicap = handicapEl ? (parseInt(handicapEl.value, 10) || 0) : 0;
+    // Le handicap se pose pour Noir ; il n'a de sens que si le joueur est Noir.
+    if (humanColor !== 1) aiHandicap = 0;
 
     stopBridgePolling();
     resetGame();
@@ -328,13 +391,34 @@ async function startKataGoGame() {
 
     vsAI = true;
     gtpMoves = [];
+    aiInitialStones = [];
     myColor = humanColor;
     gameId = "KATAGO";
+
+    /* Handicap : Noir pose ses pierres avant le debut, puis c'est Blanc qui
+       ouvre. Ces pierres ne passent pas par playMove() — elles ne capturent
+       rien et ne sont pas des coups — d'ou la pose directe sur le plateau. */
+    if (aiHandicap >= 2) {
+        const pts = handicapPoints(size, aiHandicap);
+        for (const p of pts) {
+            board[p.y][p.x] = 1;
+            aiInitialStones.push(["B", boardToGtp(p.x, p.y, size)]);
+        }
+        // Rendre 7,5 points a Blanc annulerait le handicap qu'on vient de poser.
+        activeKomi = 0.5;
+        currentPlayer = 2;
+    } else {
+        activeKomi = KOMI;
+        currentPlayer = 1;
+    }
     // Empeche setupChatListener() d'aller ouvrir un listener Firebase sur une
     // partie qui n'existe pas cote serveur.
     chatListener = function noChatInAiMode() {};
 
-    const aiName = `KataGo (${aiVisits} visites)`;
+    // Un rang parle a un joueur ; « 500 visites » ne parle a personne.
+    const aiName = humanLevel
+        ? `KataGo — ${humanLevel.label.split(' — ')[0]}`
+        : `KataGo (${aiVisits} visites)`;
     localGameRef = new LocalGameRef({
         status: "playing",
         players: {
@@ -346,7 +430,7 @@ async function startKataGoGame() {
                 : { uid: "katago", nickname: aiName }
         },
         board: board,
-        currentPlayer: 1,
+        currentPlayer: currentPlayer,
         history: [],
         moves: [],
         consecutivePasses: 0,
@@ -366,7 +450,15 @@ async function startKataGoGame() {
 
     showScreen(gameScreen);
     setupGameListener();
-    showMessage(gameMessage, `Partie contre KataGo (${size}x${size}). A vous de jouer.`, "lightgreen");
+
+    const who = humanLevel ? humanLevel.label : `KataGo (${aiVisits} visites)`;
+    const hcap = aiHandicap >= 2 ? ` · handicap ${aiHandicap} pierres` : '';
+    const turn = aiHandicap >= 2 ? 'KataGo ouvre.' : 'A vous de jouer.';
+    showMessage(gameMessage, `${who} · ${size}x${size}${hcap}. ${turn}`, "lightgreen");
+
+    // En handicap c'est Blanc (le moteur) qui commence : il faut l'amorcer,
+    // sinon la partie attend un coup du joueur qui n'a pas le trait.
+    if (aiHandicap >= 2 && aiColor === 2) setTimeout(maybeAiMove, 250);
 }
 
 /* Nettoyage : resetGame() est appele depuis plusieurs endroits de script.js,
@@ -377,6 +469,9 @@ resetGame = function () {
     aiThinking = false;
     localGameRef = null;
     gtpMoves = [];
+    aiInitialStones = [];
+    aiHandicap = 0;
+    aiHumanProfile = null;
     const evalBar = document.getElementById("aiEvalBar");
     if (evalBar) evalBar.style.display = "none";
     const undoBtn = document.getElementById("undoBtn");
@@ -466,6 +561,47 @@ function showInstallFor(os) {
     });
 }
 
+/* Les niveaux « joueur simule » n'existent que si le reseau humain est installe.
+   On ne les affiche jamais sans lui : un menu qui annonce « 20 kyu » et envoie
+   un joueur dan est pire que pas de menu du tout. */
+function applyHumanAvailability(hasHuman) {
+    const group = document.getElementById("humanLevelGroup");
+    const hint = document.getElementById("strengthHint");
+    const select = document.getElementById("aiStrengthSelect");
+    if (group) group.style.display = hasHuman ? "" : "none";
+    if (hint) {
+        hint.innerHTML = hasHuman
+            ? "Choisis un rang proche du tien : c'est en gagnant parfois qu'on progresse."
+            : "Le moteur joue au niveau dan même à 100 visites. " +
+              "<a href=\"#\" id=\"humanModelHelp\">Jouer contre un débutant ?</a>";
+        wireHumanModelHelp();
+    }
+    // Premiere detection : on pousse le debutant vers un adversaire jouable
+    // plutot que de le laisser sur le moteur par defaut.
+    if (hasHuman && select && !select.dataset.userPicked) {
+        select.value = "rank_15k";
+    }
+}
+
+function wireHumanModelHelp() {
+    const link = document.getElementById("humanModelHelp");
+    if (!link || link.dataset.wired) return;
+    link.dataset.wired = "1";
+    link.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.alert(
+            "Pour jouer contre un vrai débutant\n\n" +
+            "KataGo peut imiter un joueur d'un rang donné (20 kyu, 15 kyu…) au lieu\n" +
+            "de chercher le meilleur coup. Il faut pour cela un second réseau (94 Mo).\n\n" +
+            "Dans le dossier du jeu, lance :\n\n" +
+            "    node server/get-human-model.js\n\n" +
+            "puis relance le moteur :\n\n" +
+            "    node server/bridge.js\n\n" +
+            "Les niveaux 20 kyu à 5 dan apparaîtront alors dans ce menu."
+        );
+    });
+}
+
 function setBridgeStatus(state, text) {
     const box = document.getElementById("bridgeStatus");
     const label = document.getElementById("bridgeStatusText");
@@ -499,6 +635,7 @@ async function checkBridge() {
         const res = await bridgeFetch("/health", { signal: ctrl.signal });
         clearTimeout(timer);
         const health = await res.json();
+        applyHumanAvailability(Boolean(health.human));
         if (health.ok) {
             setBridgeStatus("ready", `Moteur prêt — ${health.engine}`);
             stopBridgePolling();
@@ -594,6 +731,29 @@ function bindKataGoButton() {
     const recheck = document.getElementById("recheckBridgeBtn");
     if (recheck) recheck.onclick = checkBridge;
 
+    // Un choix explicite du joueur ne doit jamais etre ecrase par la selection
+    // automatique du niveau debutant a la detection du reseau humain.
+    const strength = document.getElementById("aiStrengthSelect");
+    if (strength) strength.addEventListener("change", () => {
+        strength.dataset.userPicked = "1";
+    });
+
+    // Le handicap ne se pose que pour Noir : le proposer a Blanc n'a pas de sens.
+    const colorSel = document.getElementById("aiColorSelect");
+    const hcapSel = document.getElementById("aiHandicapSelect");
+    if (colorSel && hcapSel) {
+        const syncHandicap = () => {
+            const isBlack = colorSel.value === "1";
+            hcapSel.disabled = !isBlack;
+            if (!isBlack) hcapSel.value = "0";
+            const group = hcapSel.closest(".form-group");
+            if (group) group.style.opacity = isBlack ? "" : "0.5";
+        };
+        colorSel.addEventListener("change", syncHandicap);
+        syncHandicap();
+    }
+
+    wireHumanModelHelp();
     checkBridge();
 }
 

@@ -1701,6 +1701,22 @@ button:disabled:hover {
   line-height: 1.45;
 }
 
+/* Explication sous un champ de formulaire : dit ce que l'option change
+   reellement, la ou un intitule seul laisserait croire au contraire (« 100
+   visites » se lit comme « faible » alors que le moteur y joue au niveau dan). */
+.field-hint {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.field-hint a {
+  color: var(--primary-wood);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.field-hint a:hover { opacity: 0.8; }
+
 /* ========== Courbe de progression du classement ========== */
 .rating-chart {
   margin-bottom: 14px;
@@ -1874,6 +1890,48 @@ button:disabled:hover {
 }
 .cat-chip::before {
   content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex-shrink: 0;
+}
+
+/* ===== « Où tu perds tes points » : points jetés par tiers de partie =====
+   Une barre par phase, mise à l'échelle de la pire. La longueur se compare d'un
+   coup d'œil — c'est ce qu'un pourcentage global ne montre jamais. */
+.phase-list { display: flex; flex-direction: column; gap: 8px; }
+.phase-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 4.5rem;
+  align-items: center;
+  gap: 10px;
+}
+.phase-name {
+  font-size: 0.82rem; color: var(--text-light);
+  display: flex; flex-direction: column; line-height: 1.2;
+}
+.phase-name small { font-size: 0.65rem; color: var(--text-muted); }
+.phase-bar {
+  height: 8px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.phase-bar i {
+  display: block; height: 100%; border-radius: 4px;
+  background: var(--primary-wood);
+  transition: width 0.35s ease;
+}
+.phase-num {
+  font-size: 0.8rem; color: var(--text-light); text-align: right;
+  display: flex; flex-direction: column; line-height: 1.2;
+}
+.phase-num small { font-size: 0.65rem; color: var(--text-muted); }
+/* La phase la plus coûteuse : c'est l'information à retenir. */
+.phase-worst .phase-bar i { background: #e57373; }
+.phase-worst .phase-name { color: #e57373; }
+.phase-empty { opacity: 0.4; }
+.phase-none { font-size: 0.72rem; color: var(--text-muted); font-style: italic; }
+.phase-advice {
+  margin: 12px 0 0; padding: 10px 12px;
+  border-left: 2px solid var(--primary-wood);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.8rem; color: var(--text-light); line-height: 1.5;
 }
 
 .analysis-section { margin-bottom: 20px; }

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260724d">
+  <link rel="stylesheet" href="style.css?v=20260727a">
   <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
@@ -121,13 +121,48 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="aiStrengthSelect">Force de KataGo :</label>
+                        <label for="aiStrengthSelect">Niveau de l'adversaire :</label>
                         <select id="aiStrengthSelect">
-                            <option value="100">Rapide — 100 visites</option>
-                            <option value="500" selected>Fort — 500 visites</option>
-                            <option value="2000">Très fort — 2000 visites</option>
-                            <option value="10000">Maximum — 10000 visites (lent)</option>
+                            <!-- Les niveaux « rang » ne s'affichent que si le réseau
+                                 humain est installé : les proposer sans lui ferait
+                                 jouer un dan sous une étiquette de débutant. -->
+                            <optgroup label="Joueur simulé" id="humanLevelGroup" style="display:none;">
+                                <option value="rank_20k">20 kyu — grand débutant</option>
+                                <option value="rank_15k">15 kyu — débutant</option>
+                                <option value="rank_10k">10 kyu — intermédiaire</option>
+                                <option value="rank_5k">5 kyu — confirmé</option>
+                                <option value="rank_1k">1 kyu — fort</option>
+                                <option value="rank_5d">5 dan — expert</option>
+                            </optgroup>
+                            <optgroup label="Moteur (très fort)">
+                                <option value="100">Moteur — 100 visites (≈ 5 dan)</option>
+                                <option value="500" selected>Moteur — 500 visites (≈ 7 dan)</option>
+                                <option value="2000">Moteur — 2000 visites</option>
+                                <option value="10000">Moteur — 10000 visites (lent)</option>
+                            </optgroup>
                         </select>
+                        <p class="field-hint" id="strengthHint">
+                            Le moteur joue au niveau dan même à 100 visites.
+                            <a href="#" id="humanModelHelp">Jouer contre un débutant ?</a>
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="aiHandicapSelect">Handicap (pierres d'avance) :</label>
+                        <select id="aiHandicapSelect">
+                            <option value="0" selected>Aucun</option>
+                            <option value="2">2 pierres</option>
+                            <option value="3">3 pierres</option>
+                            <option value="4">4 pierres</option>
+                            <option value="5">5 pierres</option>
+                            <option value="6">6 pierres</option>
+                            <option value="7">7 pierres</option>
+                            <option value="8">8 pierres</option>
+                            <option value="9">9 pierres — maximum</option>
+                        </select>
+                        <p class="field-hint">
+                            Chaque pierre vaut environ un rang d'écart. C'est la façon
+                            normale de jouer contre plus fort que soi.
+                        </p>
                     </div>
                     <div id="bridgeStatus" class="bridge-status checking">
                         <span class="bridge-dot"></span>
@@ -287,9 +322,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-  <script src="glicko2.js?v=20260724d"></script>
-  <script src="script.js?v=20260724d"></script>
-  <script src="katago.js?v=20260724d"></script>
-  <script src="analysis.js?v=20260724d"></script>
+  <script src="glicko2.js?v=20260727a"></script>
+  <script src="script.js?v=20260727a"></script>
+  <script src="katago.js?v=20260727a"></script>
+  <script src="analysis.js?v=20260727a"></script>
 </body>
 </html>

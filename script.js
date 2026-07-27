@@ -84,6 +84,11 @@ const publicGameNote = document.getElementById("publicGameNote");
 /* ========== Variables d'état & Constantes ========== */
 let BOARD_SIZE = 19;
 const KOMI = 7.5;
+/* Komi reellement applique a la partie en cours. En partie a handicap, Noir a
+   deja des pierres d'avance : lui rendre 7,5 points en plus reviendrait a
+   annuler le handicap. On tombe alors a 0,5 (juste de quoi eviter les nulles).
+   Tout ce qui compte les points doit lire activeKomi, jamais KOMI. */
+let activeKomi = KOMI;
 let CELL_SIZE;
 const BOARD_MARGIN = 30; // Espace pour les coordonnées
 
@@ -101,6 +106,8 @@ let gameOver = false;
 let gameRef = null;
 let hoverPoint = null;
 let gameListener = null;
+// Detache le listener de negociation WebRTC (offer/answer) reste en attente.
+let signalingCleanup = null;
 let moveInProgress = false;
 // Vrai quand le même compte occupe les deux couleurs (partie créée puis
 // rejointe soi-même, typiquement pour tester seul en deux fenêtres). On autorise
@@ -319,37 +326,73 @@ function respondToUndo(accepted) {
 }
 
 // ========== Historique des parties ==========
-async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter) {
+/* Les regles Firebase publiees dans la console derivent du depot : elles vivent
+   ailleurs et ne suivent pas les commits. Or la regle « $other: validate false »
+   rejette l'entree ENTIERE des qu'un champ n'y figure pas encore. Un seul champ
+   recent (ratingAfter, moveCount...) suffit donc a faire perdre toute la partie,
+   alors que les compteurs et la note, eux, passent : ils sont sur d'autres
+   chemins. Symptome vecu : 46 parties au compteur, 1 seule dans l'historique.
+
+   On ecrit donc par degradation : entree complete, puis on retire les champs
+   optionnels du plus recent au plus ancien. Une partie enregistree sans sa
+   precision vaut infiniment mieux qu'une partie perdue. */
+const HISTORY_OPTIONAL_FIELDS = ['accuracy', 'aiVisits', 'moveCount', 'ratingAfter', 'gameId'];
+
+async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter, accuracy) {
     if (!myUid || myColor === 0) return;
-    try {
-        // Entree d'historique. ratingAfter (classement apres la partie) et
-        // moveCount alimenteront le graphe de progression et les statistiques.
-        const entry = {
-            date: Date.now(),
-            result,          // 'win' | 'loss' | 'draw'
-            opponent: opponentNickname || '?',
-            boardSize: boardSz,
-            gameId: String(gameId)
-        };
-        if (typeof ratingAfter === 'number') entry.ratingAfter = ratingAfter;
-        if (Array.isArray(moveList)) entry.moveCount = Math.max(2, moveList.length);
-        // Partie contre KataGo : on garde la force affrontee.
-        if (typeof vsAI !== 'undefined' && vsAI && typeof aiVisits === 'number') {
-            entry.aiVisits = aiVisits;
+
+    // Noyau exige par la regle « hasChildren » : jamais retire.
+    const entry = {
+        date: Date.now(),
+        result,          // 'win' | 'loss' | 'draw'
+        opponent: opponentNickname || '?',
+        boardSize: boardSz
+    };
+    if (gameId) entry.gameId = String(gameId);
+    if (typeof ratingAfter === 'number') entry.ratingAfter = ratingAfter;
+    if (Array.isArray(moveList)) entry.moveCount = Math.max(2, moveList.length);
+    if (typeof accuracy === 'number' && isFinite(accuracy)) {
+        entry.accuracy = Math.max(0, Math.min(100, Math.round(accuracy)));
+    }
+    // Partie contre KataGo : on garde la force affrontee.
+    if (typeof vsAI !== 'undefined' && vsAI && typeof aiVisits === 'number') {
+        entry.aiVisits = aiVisits;
+    }
+
+    const ref = db.ref(`users/${myUid}/history`);
+    let dropped = [];
+    let lastErr = null;
+
+    for (const field of [null, ...HISTORY_OPTIONAL_FIELDS]) {
+        if (field !== null) {
+            if (!(field in entry)) continue;   // rien a retirer : essai inutile
+            delete entry[field];
+            dropped.push(field);
         }
-        await db.ref(`users/${myUid}/history`).push(entry);
-    } catch(e) {
-        console.error("Erreur historique:", e);
-        // Un refus des regles Firebase (champ non autorise, historique en
-        // ajout-seul) fait echouer l'ecriture sans que rien ne se voie : la
-        // partie n'apparait pas dans l'historique et le graphe reste vide.
-        // On le dit clairement plutot que d'echouer en silence.
-        if (typeof showMessage === 'function' && typeof gameMessage !== 'undefined') {
-            showMessage(gameMessage,
-                "Partie non enregistrée dans l'historique — republie tes règles Firebase.",
-                "orange");
+        try {
+            await ref.push(entry);
+            if (dropped.length && typeof showMessage === 'function' && typeof gameMessage !== 'undefined') {
+                // Enregistre, mais ampute : on dit quoi faire pour recuperer le reste.
+                showMessage(gameMessage,
+                    "Partie enregistrée, mais tes règles Firebase sont périmées " +
+                    `(${dropped.join(', ')} ignoré${dropped.length > 1 ? 's' : ''}). ` +
+                    "Republie firebase-rules.json pour retrouver la courbe de progression.",
+                    "orange");
+            }
+            return true;
+        } catch (e) {
+            lastErr = e;
         }
     }
+
+    // Meme le noyau est refuse : la cause n'est plus un champ inconnu.
+    console.error("Erreur historique:", lastErr);
+    if (typeof showMessage === 'function' && typeof gameMessage !== 'undefined') {
+        showMessage(gameMessage,
+            "Partie non enregistrée dans l'historique — republie tes règles Firebase.",
+            "orange");
+    }
+    return false;
 }
 
 // ========== Viewport (Zoom / Pan) ==========
@@ -454,10 +497,15 @@ async function startSignaling(isCreator) {
             if (ans && peerConnection && !peerConnection.remoteDescription) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(ans));
                 answerRef.off("value", answerListener);
+                signalingCleanup = null;
                 showScreen(gameScreen);
                 showMessage(gameMessage, "L'adversaire a rejoint ! La partie commence (WebRTC).", "lightgreen");
             }
         });
+        // Ce listener ne se detache que si l'adversaire arrive. Quitter le salon
+        // avant (annulation, retour au menu) le laisserait branche pour toute la
+        // session, et une partie recreee en empilerait un de plus.
+        signalingCleanup = () => { try { answerRef.off("value", answerListener); } catch (e) {} };
     } else {
         peerConnection.ondatachannel = e => setupDataChannelLocal(e.channel);
         const offerRef = db.ref(`games/${gameId}/offer`);
@@ -469,10 +517,12 @@ async function startSignaling(isCreator) {
                 await peerConnection.setLocalDescription(answer);
                 await db.ref(`games/${gameId}`).update({ answer: answer });
                 offerRef.off("value", offerListener);
+                signalingCleanup = null;
                 showScreen(gameScreen);
                 showMessage(gameMessage, "Partie rejointe ! En attente de coups (WebRTC).", "lightgreen");
             }
         });
+        signalingCleanup = () => { try { offerRef.off("value", offerListener); } catch (e) {} };
     }
     peerConnection.onconnectionstatechange = () => {
         const s = peerConnection.connectionState;
@@ -629,15 +679,33 @@ function renderStatsPanelContent(panel) {
    au niveau de depart, et survol pour lire chaque point. */
 function renderRatingChart(el, chrono) {
     if (!el) return;
-    const pts = (chrono || [])
+    const all = chrono || [];
+    const pts = all
         .filter(e => e && typeof e.ratingAfter === 'number')
         .map(e => ({ r: e.ratingAfter, date: e.date, result: e.result }));
 
     if (pts.length < 2) {
-        // On distingue « rien » de « une seule » pour ne pas laisser croire a un bug.
-        const msg = pts.length === 1
-            ? 'Encore une partie classée et ta courbe apparaît !'
-            : 'Aucune partie classée pour l\'instant. Affronte KataGo (connecté) ou un ami : les parties contre toi-même (hot-seat) ne comptent pas.';
+        /* Trois causes possibles, et les confondre rend fou : on a longtemps
+           affiche « aucune partie classee » a un joueur qui en avait 46 au
+           compteur. Le vrai coupable etait l'ecriture d'historique rejetee par
+           des regles Firebase perimees — invisible depuis l'interface. On
+           distingue donc le cas « le compteur et l'historique se contredisent »,
+           qui est un defaut a reparer, et non un manque de parties. */
+        const played = (myStats && myStats.gamesPlayed) || 0;
+        let msg;
+        if (played > all.length + 1) {
+            msg = `Ta courbe est incomplète : ${played} parties au compteur mais ` +
+                  `${all.length} dans l'historique. Republie firebase-rules.json ` +
+                  `dans ta console Firebase — les règles en ligne rejettent les ` +
+                  `nouvelles parties.`;
+        } else if (all.length > pts.length) {
+            msg = 'Tes parties sont enregistrées mais sans leur classement. ' +
+                  'Republie firebase-rules.json : la courbe se remplira dès la prochaine partie.';
+        } else if (pts.length === 1) {
+            msg = 'Encore une partie classée et ta courbe apparaît !';
+        } else {
+            msg = 'Aucune partie classée pour l\'instant. Affronte KataGo (connecté) ou un ami : les parties contre toi-même (hot-seat) ne comptent pas.';
+        }
         el.innerHTML = '<p class="rating-chart-empty">' + msg + '</p>';
         return;
     }
@@ -927,7 +995,7 @@ function computeScore(state) {
             }
         }
     }
-    white += KOMI;
+    white += activeKomi;
     return { black, white };
 }
 function updateScore() {
@@ -937,7 +1005,7 @@ function updateScore() {
     if (blackCapturesEl) blackCapturesEl.textContent =
         `${bCap} cap. · ~${Math.floor(black)} pts`;
     if (whiteCapturesEl) whiteCapturesEl.textContent =
-        `${wCap} cap. · ~${white.toFixed(1)} pts (komi ${KOMI})`;
+        `${wCap} cap. · ~${white.toFixed(1)} pts (komi ${activeKomi})`;
 }
 
 function updatePlayerPanels(gameData) {
@@ -1270,7 +1338,23 @@ async function endGame(message) {
             // dans la partie a la creation / jonction.
             let ratingAfter;
             if (typeof vsAI !== 'undefined' && vsAI) {
-                const opp = (typeof KATAGO_RATINGS !== 'undefined' && KATAGO_RATINGS[aiVisits]) || { rating: 2600, rd: 80 };
+                // Adversaire « humain » : la note du rang imite, bien plus basse
+                // que celle du moteur. Sans ca, battre un 20 kyu simule vaudrait
+                // autant que battre un semi-pro et le classement perdrait son sens.
+                let opp = null;
+                if (typeof aiHumanProfile !== 'undefined' && aiHumanProfile &&
+                    typeof HUMAN_LEVELS !== 'undefined') {
+                    const lvl = HUMAN_LEVELS.find(l => l.profile === aiHumanProfile);
+                    if (lvl) opp = { rating: lvl.rating, rd: (typeof HUMAN_RD !== 'undefined' ? HUMAN_RD : 90) };
+                }
+                if (!opp) {
+                    opp = (typeof KATAGO_RATINGS !== 'undefined' && KATAGO_RATINGS[aiVisits]) || { rating: 2600, rd: 80 };
+                }
+                // Chaque pierre de handicap vaut environ un rang : gagner a 9
+                // pierres contre un 10 kyu n'equivaut pas a le battre a egalite.
+                if (typeof aiHandicap !== 'undefined' && aiHandicap >= 2) {
+                    opp = { rating: Math.max(100, opp.rating - aiHandicap * 100), rd: opp.rd };
+                }
                 ratingAfter = updateMyRating(result, opp.rating, opp.rd);
             } else {
                 const oppColor = myColor === 1 ? 'white' : 'black';
@@ -1569,10 +1653,29 @@ function renderBoard() {
     drawMoveNumbers();
     drawHoverPoint();
 }
+/* Un redessin repeint toute la grille, les coordonnees, les pierres et les
+   numeros : sur 19x19 c'est loin d'etre gratuit. Le survol de la souris peut en
+   demander plus de cent par seconde, dont un seul sera visible. On coalesce
+   donc sur la frame d'affichage : au plus un rendu par rafraichissement ecran. */
+let _renderScheduled = false;
+function scheduleRender() {
+    if (_renderScheduled) return;
+    _renderScheduled = true;
+    requestAnimationFrame(() => {
+        _renderScheduled = false;
+        renderBoard();
+    });
+}
+
 function updateHoverPoint(e) {
     if (gameOver || myColor === 0 || (myColor !== currentPlayer && !ownBothSides)) {
-        hoverPoint = null;
-        renderBoard();
+        // Ne rien redessiner s'il n'y avait deja pas de survol : sinon chaque
+        // mouvement de souris repeint le plateau pendant que KataGo reflechit,
+        // et pendant toute la fin de partie.
+        if (hoverPoint) {
+            hoverPoint = null;
+            scheduleRender();
+        }
         return;
     }
     const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : undefined);
@@ -1585,12 +1688,12 @@ function updateHoverPoint(e) {
         isLegal = isLegalMove(x, y, currentPlayer, board);
         if (!hoverPoint || hoverPoint[0] !== x || hoverPoint[1] !== y || (hoverPoint[2] !== isLegal)) {
             hoverPoint = [x, y, isLegal];
-            renderBoard();
+            scheduleRender();
         }
     } else {
         if (hoverPoint) {
             hoverPoint = null;
-            renderBoard();
+            scheduleRender();
         }
     }
 }
@@ -1599,6 +1702,7 @@ function resetGame() {
         try { gameRef.off(); } catch (e) { }
         gameRef = null;
     }
+    if (signalingCleanup) { signalingCleanup(); signalingCleanup = null; }
     if (dataChannel) try { dataChannel.close(); } catch (e) { }
     if (peerConnection) try { peerConnection.close(); } catch (e) { }
     dataChannel = null;
@@ -1610,6 +1714,7 @@ function resetGame() {
     stopTimerTick();
     updateBoardSize(BOARD_SIZE);
     history = [];
+    activeKomi = KOMI;   // le handicap de la partie precedente ne doit pas fuir
     currentPlayer = 1;
     myColor = null;
     gameId = null;

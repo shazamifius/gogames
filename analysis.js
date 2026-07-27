@@ -20,6 +20,24 @@ function categorize(pts) {
 // Precision = 100 * exp(-pointsPerdusMoyens / K). K calibre l'echelle.
 const ACCURACY_K = 6;
 
+/* Une precision globale ne dit pas OU on perd la partie, et c'est justement la
+   seule chose actionnable : un joueur qui s'effondre en finale ne doit pas
+   travailler son ouverture. On decoupe donc en trois tiers de la partie. Le
+   decoupage est proportionnel, et non fixe (« coups 1 a 40 »), parce que les
+   parties de debutant s'arretent souvent avant meme la fin de l'ouverture. */
+const PHASES = [
+    { key: 'open', label: 'Début',  hint: 'placement, coins' },
+    { key: 'mid',  label: 'Milieu', hint: 'combats, groupes' },
+    { key: 'end',  label: 'Fin',    hint: 'frontières, points' }
+];
+function phaseOf(moveIndex, totalMoves) {
+    if (totalMoves < 3) return 'open';
+    const third = totalMoves / 3;
+    if (moveIndex < third) return 'open';
+    if (moveIndex < 2 * third) return 'mid';
+    return 'end';
+}
+
 /* Reconstruit la sequence de coups au format KataGo [["B","E5"], ...]. */
 function buildAnalysisMoves() {
     // Partie contre KataGo : gtpMoves est complet (couleurs et passes exacts).
@@ -61,7 +79,16 @@ async function analyzeCurrentGame() {
         const res = await bridgeFetch('/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ moves, boardSize: BOARD_SIZE, komi: KOMI, maxVisits: 200 })
+            // Komi et pierres de handicap reels : analyser une partie a handicap
+            // sans ses pierres reviendrait a juger chaque coup sur une position
+            // qui n'a jamais existe.
+            body: JSON.stringify({
+                moves,
+                boardSize: BOARD_SIZE,
+                komi: (typeof activeKomi === 'number' ? activeKomi : KOMI),
+                initialStones: (typeof aiInitialStones !== 'undefined' ? aiInitialStones : []),
+                maxVisits: 200
+            })
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -96,7 +123,7 @@ function computeAnalysis(turns, moves) {
         const ptsLost = Math.max(0, (before.scoreLead || 0) + (after.scoreLead || 0));
         const winLost = Math.max(0, before.winrate + after.winrate - 1);
         perMove.push({
-            n: t + 1, color, played: moves[t][1],
+            n: t + 1, color, played: moves[t][1], phase: phaseOf(t, moves.length),
             ptsLost, winLost, cat: categorize(ptsLost), best: before.bestMove
         });
         (pts[color] || (pts[color] = [])).push(ptsLost);
@@ -127,10 +154,29 @@ function computeAnalysis(turns, moves) {
         evalByTurn[t.turn] = { blackWin, blackScore };
     });
 
+    // Precision, points jetes et gaffes par tiers de partie, pour chaque camp.
+    const phaseStats = (colorLetter) => PHASES.map(p => {
+        const ms = perMove.filter(m => m.color === colorLetter && m.phase === p.key);
+        const lost = ms.map(m => m.ptsLost);
+        return {
+            key: p.key, label: p.label, hint: p.hint,
+            moves: ms.length,
+            accuracy: acc(lost),
+            totalPts: total(lost),
+            blunders: ms.filter(m => m.cat.key === 'blunder' || m.cat.key === 'mistake').length
+        };
+    });
+
     return {
         perMove, blackCurve, moves, evalByTurn,
-        black: { accuracy: acc(pts.B || []), totalPts: total(pts.B || []), counts: counts('B') },
-        white: { accuracy: acc(pts.W || []), totalPts: total(pts.W || []), counts: counts('W') }
+        black: {
+            accuracy: acc(pts.B || []), totalPts: total(pts.B || []),
+            counts: counts('B'), phases: phaseStats('B')
+        },
+        white: {
+            accuracy: acc(pts.W || []), totalPts: total(pts.W || []),
+            counts: counts('W'), phases: phaseStats('W')
+        }
     };
 }
 
@@ -182,6 +228,50 @@ function accuracyCard(color, side) {
         </div>`;
 }
 
+/* « Ou perds-tu tes points ? » — la question qui fait progresser. On n'affiche
+   que le camp du joueur : c'est sa partie a lui qu'il doit corriger, pas celle
+   de son adversaire. En multijoueur comme en hot-seat on retombe sur Noir. */
+function phaseSection(a) {
+    const meIsBlack = (typeof myColor === 'undefined' || myColor !== 2);
+    const side = meIsBlack ? a.black : a.white;
+    const phases = (side && side.phases) || [];
+    const played = phases.filter(p => p.moves > 0);
+    // Moins de deux phases jouees : la comparaison n'aurait aucun sens.
+    if (played.length < 2) return '';
+
+    // La phase la plus couteuse, en points reellement jetes.
+    const worstPhase = played.reduce((w, p) => (p.totalPts > w.totalPts ? p : w), played[0]);
+    const maxPts = Math.max(...played.map(p => p.totalPts), 0.1);
+
+    const bars = phases.map(p => {
+        if (!p.moves) {
+            return `<div class="phase-row phase-empty">
+                        <span class="phase-name">${p.label}</span>
+                        <span class="phase-none">non jouée</span>
+                    </div>`;
+        }
+        const pct = Math.round((p.totalPts / maxPts) * 100);
+        const isWorst = p.key === worstPhase.key && played.length > 1;
+        return `
+            <div class="phase-row${isWorst ? ' phase-worst' : ''}">
+                <span class="phase-name">${p.label}<small>${p.hint}</small></span>
+                <span class="phase-bar"><i style="width:${pct}%"></i></span>
+                <span class="phase-num">${p.totalPts} pts<small>${p.accuracy == null ? '—' : p.accuracy + ' %'}</small></span>
+            </div>`;
+    }).join('');
+
+    return `
+        <div class="analysis-section phase-section">
+            <div class="analysis-section-title">Où tu perds tes points</div>
+            <div class="phase-list">${bars}</div>
+            <p class="phase-advice">
+                Ta phase la plus coûteuse : <strong>${worstPhase.label.toLowerCase()}</strong>
+                (${worstPhase.totalPts} points jetés${worstPhase.blunders ? `, ${worstPhase.blunders} erreur${worstPhase.blunders > 1 ? 's' : ''} nette${worstPhase.blunders > 1 ? 's' : ''}` : ''}).
+                C'est là que tu gagneras le plus vite.
+            </p>
+        </div>`;
+}
+
 // Etat du lecteur de revue, partage entre le plateau, le graphe et les listes.
 let review = null;
 
@@ -205,6 +295,8 @@ function renderAnalysis(el, a) {
             ${accuracyCard('B', a.black)}
             ${accuracyCard('W', a.white)}
         </div>
+
+        ${phaseSection(a)}
 
         <div class="review-board-wrap">
             <canvas id="reviewBoard" width="340" height="340" aria-label="Plateau de revue"></canvas>
