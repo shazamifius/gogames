@@ -149,6 +149,13 @@ $bridgePath = Join-Path $Root 'bridge.js'
 Remove-Item $bridgePath -ErrorAction SilentlyContinue  # toujours reprendre la derniere version
 Get-File "$SiteUrl/server/bridge.js" $bridgePath "bridge.js"
 
+# Outil separe : telecharge le reseau « humanSL » (adversaires de 20 kyu a
+# 5 dan). Sans lui, l'utilisateur n'a aucun moyen de recuperer ce reseau depuis
+# une installation faite par ce script, qui ne clone pas le depot.
+$humanTool = Join-Path $Root 'get-human-model.js'
+Remove-Item $humanTool -ErrorAction SilentlyContinue
+Get-File "$SiteUrl/server/get-human-model.js" $humanTool "get-human-model.js"
+
 # Le pont sert aussi le jeu : ainsi, meme sous Safari (qui refuse le loopback
 # depuis une page HTTPS distante), on peut jouer en ouvrant http://127.0.0.1:8081.
 Step "Telechargement du jeu (pour jouer aussi en local)"
@@ -199,6 +206,21 @@ Write-Host ""
 Write-Host "  Pour rejouer plus tard, relance simplement :" -ForegroundColor DarkGray
 Write-Host "   $launcher" -ForegroundColor DarkGray
 Write-Host ""
+
+# Le moteur joue au niveau dan meme regle au minimum : un debutant ne peut pas
+# gagner. On le dit ici, sinon il l'apprendra en perdant quarante parties.
+$humanNet = Join-Path $EngineDir 'human.bin.gz'
+if (-not (Test-Path $humanNet)) {
+    Write-Host "  JOUER CONTRE UN DEBUTANT (recommande)" -ForegroundColor Cyan
+    Write-Host "   KataGo joue au niveau dan meme au reglage le plus faible :"
+    Write-Host "   les « visites » ne changent que sa profondeur de calcul."
+    Write-Host "   Pour un adversaire de 20 kyu a 5 dan, ajoute le reseau humain :"
+    Write-Host ""
+    Write-Host "     `"$nodeCmd`" `"$(Join-Path $Root 'get-human-model.js')`"" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "   (94 Mo, une seule fois — puis relance le pont.)" -ForegroundColor DarkGray
+    Write-Host ""
+}
 
 # La fenetre du pont s'ouvre a part : l'utilisateur y verra la calibration
 # puis la banniere MOTEUR PRET.
