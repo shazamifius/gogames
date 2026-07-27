@@ -338,6 +338,10 @@ function respondToUndo(accepted) {
    precision vaut infiniment mieux qu'une partie perdue. */
 const HISTORY_OPTIONAL_FIELDS = ['accuracy', 'aiVisits', 'moveCount', 'ratingAfter', 'gameId'];
 
+// Nombre de parties relues pour l'historique et la courbe. Au-dela, l'ecart
+// avec le compteur de parties est normal et ne doit pas etre signale comme un defaut.
+const HISTORY_FETCH_LIMIT = 30;
+
 async function saveGameHistory(result, opponentNickname, boardSz, ratingAfter, accuracy) {
     if (!myUid || myColor === 0) return;
 
@@ -649,13 +653,21 @@ function renderStatsPanelContent(panel) {
     if (resetBtn) resetBtn.onclick = () => resetMyStats(panel);
     // Charger l'historique de manière asynchrone
     if (myUid) {
-        db.ref(`users/${myUid}/history`).limitToLast(30).once('value').then(snap => {
+        db.ref(`users/${myUid}/history`).limitToLast(HISTORY_FETCH_LIMIT).once('value').then(snap => {
             const histSection = document.getElementById('statsPanelHistory');
             const chartEl = document.getElementById('ratingChart');
 
-            // Ordre chronologique (le plus ancien en premier) pour la courbe.
+            /* Ordre chronologique (le plus ancien en premier) pour la courbe.
+
+               Les accolades ne sont PAS decoratives : forEach de Firebase
+               interrompt l'enumeration des que le callback renvoie une valeur
+               vraie, et Array.push renvoie la nouvelle longueur — soit 1 des le
+               premier element. Ecrit sans accolades, ce forEach s'arretait donc
+               apres UNE entree, quel que soit le nombre reellement en base. La
+               courbe restait vide et l'historique affichait eternellement la
+               meme partie, alors que tout etait correctement enregistre. */
             const chrono = [];
-            snap.forEach(child => chrono.push(child.val()));
+            snap.forEach(child => { chrono.push(child.val()); });
 
             /* Quand le compteur de parties et l'historique divergent, il faut
                pouvoir dire lequel des deux ment : lecture tronquee, entrees
@@ -716,7 +728,10 @@ function renderRatingChart(el, chrono) {
            qui est un defaut a reparer, et non un manque de parties. */
         const played = (myStats && myStats.gamesPlayed) || 0;
         let msg;
-        if (played > all.length + 1) {
+        // Au-dela de la limite de lecture, un ecart avec le compteur est normal
+        // (on ne lit que les dernieres parties) : ce n'est pas un defaut.
+        const truncated = all.length >= HISTORY_FETCH_LIMIT;
+        if (!truncated && played > all.length + 1) {
             msg = `Ta courbe est incomplète : ${played} parties au compteur mais ` +
                   `${all.length} dans l'historique. Republie firebase-rules.json ` +
                   `dans ta console Firebase — les règles en ligne rejettent les ` +
