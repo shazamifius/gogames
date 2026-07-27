@@ -202,6 +202,10 @@ function askEngine(query, timeoutMs = 120000) {
 
 const GTP_LETTERS = 'ABCDEFGHJKLMNOPQRST'; // pas de I, convention go
 
+// En dessous, le moteur peut ne developper aucun coup et rendre une liste vide.
+// Sert de filet quand une requete arrive avec trop peu de visites.
+const RESEARCH_MIN_VISITS = 16;
+
 /* Le pont accepte des requetes du navigateur : tout ce qui est reinjecte dans
    le moteur est valide ici, jamais fait confiance tel quel. */
 
@@ -322,7 +326,25 @@ async function genmove({ moves, boardSize, komi, maxVisits, initialStones, human
   }
 
   if (!infos.length) {
-    // Aucun coup legal propose : le moteur estime qu'il faut passer.
+    /* Liste vide ne veut PAS dire « il faut passer ». A tres peu de visites, le
+       moteur n'a simplement developpe aucun coup : il en reste des dizaines de
+       legaux. Passer ici donnait une IA qui passait a chaque tour pendant que le
+       joueur remplissait le plateau seul. On relance donc une vraie recherche
+       avant de conclure, et on ne passe qu'apres l'avoir faite. */
+    if (maxVisits < RESEARCH_MIN_VISITS) {
+      const retry = await askEngine({ ...query, maxVisits: RESEARCH_MIN_VISITS });
+      const retryInfos = retry.moveInfos || [];
+      if (retryInfos.length) {
+        let b = retryInfos[0];
+        for (const info of retryInfos) { if (info.order === 0) { b = info; break; } }
+        return {
+          move: b.move, winrate: b.winrate, scoreLead: b.scoreLead,
+          visits: (retry.rootInfo && retry.rootInfo.visits) || b.visits,
+          moveVisits: b.visits, pv: b.pv || [], recovered: true
+        };
+      }
+    }
+    // Recherche faite, toujours rien : le moteur estime vraiment qu'il faut passer.
     return { move: 'pass', winrate: null, scoreLead: null, visits: 0 };
   }
 

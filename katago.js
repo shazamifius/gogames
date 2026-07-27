@@ -65,8 +65,12 @@ const HUMAN_LEVELS = [
     { profile: 'rank_5d',  label: '5 dan — expert',          rating: 2700 }
 ];
 const HUMAN_RD = 90; // moins sur qu'un moteur : le rang imite est approximatif
+// Assez de visites pour que le moteur propose toujours au moins un coup, meme
+// si le pont ignore le profil humain. Reste rapide (~0,3 s par coup).
+const HUMAN_FALLBACK_VISITS = 16;
 
 let aiHumanProfile = null;    // null => moteur classique (recherche)
+let bridgeVersionWarned = false;
 let aiHandicap = 0;
 let aiInitialStones = [];     // pierres de handicap, format GTP pour le moteur
 
@@ -208,6 +212,19 @@ async function maybeAiMove() {
         }
 
         const result = await response.json();
+
+        /* On a demande un adversaire d'un rang donne et le pont a repondu sans
+           l'appliquer : c'est une version anterieure, qui ignore humanProfile.
+           Le joueur affronte alors le moteur a pleine force sous une etiquette
+           « 15 kyu ». Il doit le savoir — et une seule fois, pas a chaque coup. */
+        if (aiHumanProfile && !result.human && !bridgeVersionWarned) {
+            bridgeVersionWarned = true;
+            showMessage(gameMessage,
+                "Ton moteur local est d'une version anterieure : il ignore le niveau " +
+                "choisi et joue a pleine force. Relance le pont pour le mettre a jour.",
+                "orange");
+        }
+
         applyAiResult(result);
     } catch (e) {
         console.error("KataGo:", e);
@@ -384,9 +401,14 @@ async function startKataGoGame() {
     const levelValue = document.getElementById("aiStrengthSelect").value;
     const humanLevel = HUMAN_LEVELS.find((l) => l.profile === levelValue);
     aiHumanProfile = humanLevel ? humanLevel.profile : null;
-    // Un adversaire humain n'a pas besoin d'une recherche profonde : la policy
-    // suffit, et c'est bien plus rapide (un coup quasi instantane).
-    aiVisits = humanLevel ? 1 : (parseInt(levelValue, 10) || 500);
+    /* Un adversaire humain choisit son coup dans la policy de son rang, pas par
+       la recherche : une visite suffirait. Mais si le pont est d'une version
+       anterieure, il ignore humanProfile et retombe sur la recherche — et a une
+       seule visite KataGo ne developpe AUCUN coup, renvoie une liste vide, donc
+       « pass ». L'IA passait alors a chaque tour pendant que le joueur
+       remplissait le plateau tout seul. On garde donc de quoi produire un coup
+       valable meme quand le pont ignore le profil. */
+    aiVisits = humanLevel ? HUMAN_FALLBACK_VISITS : (parseInt(levelValue, 10) || 500);
 
     const handicapEl = document.getElementById("aiHandicapSelect");
     aiHandicap = handicapEl ? (parseInt(handicapEl.value, 10) || 0) : 0;
@@ -480,6 +502,7 @@ resetGame = function () {
     aiInitialStones = [];
     aiHandicap = 0;
     aiHumanProfile = null;
+    bridgeVersionWarned = false;   // reavertir si le pont perime sert la partie suivante
     const evalBar = document.getElementById("aiEvalBar");
     if (evalBar) evalBar.style.display = "none";
     const undoBtn = document.getElementById("undoBtn");
