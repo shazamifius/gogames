@@ -131,10 +131,15 @@ if (-not (Test-Path $example)) { throw "analysis_example.cfg absent de l'archive
 # reportAnalysisWinratesAs vaut BLACK par defaut : le taux de victoire serait
 # alors toujours donne du point de vue de Noir, ce qui fausse la logique
 # d'abandon de l'IA des qu'elle joue Blanc.
-(Get-Content $example) `
+$cfgLines = (Get-Content $example) `
     -replace '^reportAnalysisWinratesAs = BLACK', 'reportAnalysisWinratesAs = SIDETOMOVE' `
-    -replace '^numAnalysisThreads = 2', 'numAnalysisThreads = 1' |
-    Set-Content -Path $cfgPath -Encoding utf8
+    -replace '^numAnalysisThreads = 2', 'numAnalysisThreads = 1'
+
+# Surtout pas Set-Content -Encoding utf8 : sous Windows PowerShell 5.1 cela
+# ecrit un BOM. Le parseur de KataGo lit alors "﻿#..." en tete de fichier,
+# n'y reconnait plus un commentaire, et refuse de demarrer :
+#   Could not parse key value pair, line 1
+[System.IO.File]::WriteAllLines($cfgPath, $cfgLines, (New-Object System.Text.UTF8Encoding $false))
 Say "analysis.cfg ecrit."
 
 # ---------- Pont + jeu (repli local) ----------
